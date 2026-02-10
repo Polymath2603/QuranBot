@@ -1,0 +1,96 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.so
+
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+*.log
+*.pot
+
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+.pytest_cache/
+
+*.mo
+
+instance/
+.webassets-cache
+
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Data directories - Keep only metadata and text, ignore large files
+data/audio/
+data/images/
+data/tafasir/
+data/tarajem/
+data/users/
+data/*.db
+data/*.sqlite*
+
+# Keep these essential files
+!data/metadata/
+!data/text/
+!data/.gitkeep
+!data/UthmanTN_v2-0.ttf
+
+# Output directory
+output/*
+!output/.gitkeep
+
+# Cache directory
+cache/*
+!cache/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local config
+config.local.py
+.env.local
+
+# Logs
+bot.log
+feedback.txt
