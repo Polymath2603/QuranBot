@@ -57,15 +57,39 @@ def parse_message(text, quran_data):
     text = normalize_arabic(original_text)
     
     # Keyword Normalization
+    # Note: normalize_arabic changes ى to ي, so الى becomes الي
     text = re.sub(r"(from|من)\s+", "FROM ", text, flags=re.IGNORECASE)
-    text = re.sub(r"(to|الى|إلى|حتى)\s+", "TO ", text, flags=re.IGNORECASE)
+    text = re.sub(r"(to|الي|إلي|حتي|الى|إلى|حتى)\s+", "TO ", text, flags=re.IGNORECASE)
     # text = re.sub(r"(surah|sura|سورة|سوره)\s+", "SURAH ", text, flags=re.IGNORECASE) # Handled in helper
     
-    # Direct Patterns
-    match = re.match(r"^(\d+):(\d+)$", original_text)
+    # Support "Sura 1:3" or "1:3"
+    match = re.search(r"(\d+):(\d+)(?:-(\d+))?", original_text)
     if match:
-        return {"type": "aya", "sura": int(match.group(1)), "aya": int(match.group(2))}
+        s1 = int(match.group(1))
+        a1 = int(match.group(2))
+        a2 = int(match.group(3)) if match.group(3) else None
         
+        # If we have a sura name before it, use that
+        sura_names = get_all_sura_names(quran_data)
+        prefix = original_text[:match.start()].strip()
+        if prefix:
+            info = extract_sura_aya(prefix, sura_names)
+            if info:
+                # If prefix is "Baqarah 2:3", info["sura"]=2, a1=3. Wait.
+                # Usually it's "Baqarah 2:3" meaning Aya 2 to 3? Or Sura 2 Aya 3?
+                # If prefix has a number, extract_sura_aya uses it as Sura.
+                # Let's be simpler: if prefix matches a name, use that name's sura and treat s1 as aya.
+                choices = [x["name"] for x in sura_names]
+                best_match = process.extractOne(prefix, choices, scorer=fuzz.WRatio)
+                if best_match and best_match[1] > 80:
+                    matched_info = next(x for x in sura_names if x["name"] == best_match[0])
+                    if a2: return {"type": "range", "sura": matched_info["sura"], "from_aya": a1, "to_aya": a2}
+                    # "Baqarah 2:3" -> Sura 2 (Baqarah), Aya 2 to 3.
+                    return {"type": "range", "sura": matched_info["sura"], "from_aya": s1, "to_aya": a1}
+
+        if a2: return {"type": "range", "sura": s1, "from_aya": a1, "to_aya": a2}
+        return {"type": "aya", "sura": s1, "aya": a1}
+
     sura_names = get_all_sura_names(quran_data)
 
     # Check for "TO" split
@@ -75,10 +99,27 @@ def parse_message(text, quran_data):
         part2 = parts[1].strip()
         
         info1 = extract_sura_aya(part1, sura_names)
-        info2 = extract_sura_aya(part2, sura_names)
         
         if info1:
+            # If part2 is just a number, it's an Ayah in the same Sura
+            if part2.isdigit():
+                return {
+                    "type": "range",
+                    "sura": info1["sura"],
+                    "from_aya": info1.get("aya", 1),
+                    "to_aya": int(part2)
+                }
+            
+            info2 = extract_sura_aya(part2, sura_names)
             if info2 and info2.get("sura"):
+                # If both have same sura, it's a normal range
+                if info1["sura"] == info2["sura"]:
+                    return {
+                        "type": "range",
+                        "sura": info1["sura"],
+                        "from_aya": info1.get("aya", 1),
+                        "to_aya": info2.get("aya", 1)
+                    }
                 # Cross-Surah: Surah X ... Surah Y
                 return {
                     "type": "range_cross",
@@ -87,24 +128,15 @@ def parse_message(text, quran_data):
                     "to_sura": info2["sura"],
                     "to_aya": info2.get("aya", 1)
                 }
-            elif info1 and info2 and not info2.get("sura") and info2.get("aya"):
-                 # Should not happen because helper requires sura usually? 
-                 # Ah, helper returns None if no sura found in numbers check.
-                 # But if part2 is just "5", helper returns sura=5.
-                 # Meaning "Surah Baqarah 1 TO 5" -> Part2 is "5" -> Sura=5.
-                 # This is ambiguous. "5" can be Surah 5 or Ayah 5.
-                 # If Part 1 has Sura X Ayah Y, and Part 2 is just "5", it likely means Ayah 5 of Sura X.
-                 pass
-            elif info1 and not info2:
-                 # Check if Part 2 is just a number
+            elif not info2:
+                 # Check if Part 2 contains a number at all
                  nums = re.findall(r"\d+", part2)
                  if nums:
-                     to_aya = int(nums[0])
                      return {
                          "type": "range",
                          "sura": info1["sura"],
                          "from_aya": info1.get("aya", 1),
-                         "to_aya": to_aya
+                         "to_aya": int(nums[0])
                      }
 
     # If no TO logic worked, try single entity

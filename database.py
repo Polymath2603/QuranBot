@@ -15,7 +15,10 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False)
-    language = Column(String, default="en")
+    language = Column(String, default="ar")
+    voice = Column(String, default="Alafasy_64kbps")
+    text_source = Column(String, default="uthmani")
+    tafsir_source = Column(String, default="muyassar")
     preferences = Column(JSON, default=lambda: {"text_format": "txt"})  # txt, lrc, srt
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

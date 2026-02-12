@@ -34,9 +34,8 @@ def load_quran_text(data_dir: Path, source: str = "hafs") -> List[str]:
     
     if path.exists():
         lines = path.read_text(encoding="utf-8").splitlines()
-        # Skip license header (first 28 lines) to get exactly 6236 verses
-        # The file has license text at the beginning
-        return lines[28:28+6236]
+        # Files start directly with verse 1:1, no header to skip.
+        return lines[:6236]
     
     return []
 
@@ -67,8 +66,12 @@ def get_sura_aya_count(quran_data: Dict[str, Any], sura_num: int) -> int:
 
 def get_page(quran_data: Dict[str, Any], sura: int, aya: int) -> int:
     """Get page number for specified sura and aya."""
-    for page_num, page_data in enumerate(quran_data.get("Page", []), 1):
-        p_sura, p_aya = page_data[0], page_data[1]
+    pages = quran_data.get("Page", [])
+    for page_num in range(1, len(pages)):
+        p_data = pages[page_num]
+        if not p_data:
+            continue
+        p_sura, p_aya = p_data[0], p_data[1]
         if p_sura > sura or (p_sura == sura and p_aya > aya):
             return page_num - 1
     return 604

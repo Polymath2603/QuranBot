@@ -30,7 +30,8 @@ from nlu import parse_message
 
 # Enable logging - Show only warnings and errors
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.WARNING
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.WARNING
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user.language
 
     sura = int(query.data.split("_")[1])
-    voice = context.user_data.get("voice", "Alafasy_64kbps")
+    voice = user.voice or "Alafasy_64kbps"
 
     await query.edit_message_text(t("downloading", lang))
 
@@ -156,10 +157,13 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         name = get_sura_name(quran_data, sura, lang)
+        # No buttons in audio message
         await query.message.reply_audio(
             audio=open(mp3_path, "rb"), caption=f"✅ {name}", title=name
         )
-        await query.message.reply_text(t("done", lang))
+        # Text button for full sura
+        keyboard = [[InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}")]]
+        await query.message.reply_text(t("done", lang), reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Download error: {e}")
         await query.edit_message_text(f"{t('error', lang)} {str(e)}")
@@ -252,7 +256,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = get_db_user(update.effective_user)
     lang = str(user.language)
-    voice = context.user_data.get("voice", "Alafasy_64kbps")
+    voice = user.voice or "Alafasy_64kbps"
     fmt = user.get_preference("text_format", "txt")
 
     # Get localized reciter name
@@ -261,29 +265,34 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Format language name
     lang_name = "العربية" if lang == "ar" else "English"
+    other_lang = "English" if lang == "ar" else "العربية"
 
     keyboard = []
 
-    # Language toggle button
-    other_lang = "English" if lang == "ar" else "العربية"
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                f"🌐 {t('language', lang)}: {lang_name} → {other_lang}",
-                callback_data="setting_lang_toggle",
-            )
-        ]
+    # Stack 1: Language and Format
+    lang_btn = InlineKeyboardButton(
+        f"🌐 {lang_name} → {other_lang}",
+        callback_data="setting_lang_toggle",
     )
+    fmt_btn = InlineKeyboardButton(
+        f"📄 {fmt}",
+        callback_data="setting_format_toggle",
+    )
+    keyboard.append([lang_btn, fmt_btn])
 
-    # Text format cycling
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                f"📄 {t('text_format', lang)}: {fmt}",
-                callback_data="setting_format_toggle",
-            )
-        ]
+    # Stack 2: Text and Tafsir Source (Localized names)
+    text_src_name = t(user.text_source, lang)
+    tafsir_src_name = t(user.tafsir_source, lang)
+    
+    text_btn = InlineKeyboardButton(
+        f"📜 {text_src_name}",
+        callback_data="setting_text_toggle",
     )
+    tafsir_btn = InlineKeyboardButton(
+        f"📖 {tafsir_src_name}",
+        callback_data="setting_tafsir_toggle",
+    )
+    keyboard.append([text_btn, tafsir_btn])
 
     # Reciter selection header
     keyboard.append(
@@ -296,8 +305,16 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard.append([InlineKeyboardButton(t("back", lang), callback_data="menu_main")])
 
-    # Format settings text with all placeholders
-    text = t("settings_title", lang, reciter=reciter_name, language=lang_name, fmt=fmt)
+    # Format settings text
+    text = t(
+        "settings_title",
+        lang,
+        reciter=reciter_name,
+        language=lang_name,
+        text_source=text_src_name,
+        tafsir_source=tafsir_src_name,
+        fmt=fmt,
+    )
 
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -312,7 +329,7 @@ async def voice_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user = get_db_user(update.effective_user)
     lang = user.language
-    voice = context.user_data.get("voice", "Alafasy_64kbps")
+    voice = user.voice or "Alafasy_64kbps"
 
     # Get page number from callback data (voice_list_0, voice_list_1, etc.)
     if query.data and query.data.startswith("voice_list_"):
@@ -381,14 +398,19 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     user = get_db_user(update.effective_user)
-    lang = user.language
 
     # Extract voice code: "voice_Alafasy_64kbps" -> "Alafasy_64kbps"
     voice = query.data.replace("voice_", "", 1)
-    context.user_data["voice"] = voice
+    
+    session = get_session()
+    db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+    if db_user:
+        db_user.voice = voice
+        session.commit()
+    session.close()
 
-    # Return to settings menu instead of voice list
-    await settings_handler(update, context)
+    # Return to start instead of settings as requested
+    await main_menu(update, context)
 
 
 async def setting_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -467,8 +489,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [
             [
-                InlineKeyboardButton("🎧 Audio", callback_data=f"play_{sura}_{aya}"),
-                InlineKeyboardButton("📖 Tafsir", callback_data=f"tafsir_{sura}_{aya}"),
+                InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_{aya}"),
+                InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}_{aya}"),
+                InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{aya}"),
             ]
         ]
 
@@ -497,7 +520,10 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "🎧 Audio", callback_data=f"play_{sura}_{start}_{end}"
+                    t("audio", lang), callback_data=f"play_{sura}_{start}_{end}"
+                ),
+                InlineKeyboardButton(
+                    t("text", lang), callback_data=f"text_{sura}_{start}_{end}"
                 )
             ]
         ]
@@ -549,6 +575,119 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    data = query.data.split("_")
+    sura = int(data[1])
+    
+    user = get_db_user(update.effective_user)
+    lang = user.language
+
+    # Fetch text based on current user preference
+    # For now, we use the loaded verses (hafs) as default
+    # Future: load different sources if user.text_source != "hafs"
+    
+    start = 0
+    end = 0
+    aya = 0
+    if len(data) == 3: # single aya
+        aya = int(data[2])
+        start_index = int(quran_data["Sura"][sura][0])
+        verse_text = verses[start_index + aya - 1]
+        response = f"📖 {get_sura_name(quran_data, sura, lang)} ({aya})\n\n﴿ {verse_text} ﴾"
+    else: # range
+        start = int(data[2])
+        end = int(data[3])
+        start_index = int(quran_data["Sura"][sura][0])
+        full_text = "﴿ "
+        for i in range(start, end + 1):
+            full_text += f"{verses[start_index + i - 1]} ﴿{i}﴾ "
+        full_text += "﴾"
+        response = f"📖 {get_sura_name(quran_data, sura, lang)} ({start}-{end})\n\n{full_text}"
+
+    # Handle File Formats
+    fmt = user.get_preference("text_format", "txt")
+    if fmt in ["srt", "lrc", "txt"]:
+        file_ext = fmt
+        voice = user.voice or "Alafasy_64kbps"
+        
+        # Construct range_id manually since we don't always have gen_mp3 range_id here
+        if len(data) == 3:
+            r_id = f"{sura:03d}{int(data[2]):03d}{sura:03d}{int(data[2]):03d}"
+        else:
+            r_id = f"{sura:03d}{int(data[2]):03d}{sura:03d}{int(data[3]):03d}"
+            
+        file_name = f"{voice}-{r_id}.{file_ext}"
+        content = ""
+        
+        if fmt == "txt":
+            content = response
+        elif len(data) == 3:
+            content = f"1\n00:00:00,000 --> 00:00:10,000\n{verses[start_index + aya - 1]}"
+        else:
+            for i, val in enumerate(range(start, end + 1), 1):
+                start_time = f"00:00:{i*10:02d},000"
+                end_time = f"00:00:{(i+1)*10:02d},000"
+                content += f"{i}\n{start_time} --> {end_time}\n{verses[start_index + val - 1]}\n\n"
+        
+        from io import BytesIO
+        bio = BytesIO(content.encode("utf-8"))
+        bio.name = file_name
+        await query.message.reply_document(document=bio, caption=f"📄 {file_name}")
+        
+        # If it was txt, we already sent it as a file, but maybe we still want the preview?
+        # The user only asked for the filename consistency.
+        if fmt != "txt": return 
+
+    if len(response) > 4000:
+        response = response[:3997] + "..."
+
+    await query.message.reply_text(response)
+
+
+async def setting_text_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_db_user(update.effective_user)
+    sources = ["uthmani", "tajweed", "warsh"]
+    current = user.text_source
+    try:
+        idx = sources.index(current)
+    except:
+        idx = 0
+    new_src = sources[(idx + 1) % len(sources)]
+    
+    session = get_session()
+    db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+    if db_user:
+        db_user.text_source = new_src
+        session.commit()
+    session.close()
+    await settings_handler(update, context)
+
+
+async def setting_tafsir_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_db_user(update.effective_user)
+    sources = ["muyassar", "jalalayn", "qurtubi", "ibn-kathir"]
+    current = user.tafsir_source
+    try:
+        idx = sources.index(current)
+    except:
+        idx = 0
+    new_src = sources[(idx + 1) % len(sources)]
+
+    session = get_session()
+    db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+    if db_user:
+        db_user.tafsir_source = new_src
+        session.commit()
+    session.close()
+    await settings_handler(update, context)
+
+
 async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
@@ -568,7 +707,7 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user = get_db_user(update.effective_user)
     lang = str(user.language)
-    voice = context.user_data.get("voice", "Alafasy_64kbps")
+    voice = user.voice or "Alafasy_64kbps"
 
     if not query.message:
         return
@@ -592,40 +731,27 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             else f"{sura_name} ({start_aya})"
         )
 
-        if start_aya == end_aya:
-            mp3_path = await asyncio.to_thread(get_audio_file, voice, sura, start_aya)
-        else:
-            mp3_path = await asyncio.to_thread(
-                gen_mp3,
-                DATA_DIR / "audio",
-                OUTPUT_DIR,
-                quran_data,
-                voice,
-                sura,
-                start_aya,
-                sura,
-                end_aya,
-                title=title,
-                artist=artist_name,
-            )
+        # Always use gen_mp3 to ensure metadata is embedded correctly
+        mp3_path = await asyncio.to_thread(
+            gen_mp3,
+            DATA_DIR / "audio",
+            OUTPUT_DIR,
+            quran_data,
+            voice,
+            sura,
+            start_aya,
+            sura,
+            end_aya,
+            title=title,
+            artist=artist_name,
+        )
 
-        # Audio Reply Markup
-        keyboard = [[InlineKeyboardButton(t("back", lang), callback_data="menu_main")]]
-        if start_aya == end_aya:
-            keyboard[0].insert(
-                0,
-                InlineKeyboardButton(
-                    t("tafsir", lang), callback_data=f"tafsir_{sura}_{start_aya}"
-                ),
-            )
-
+        # Send audio with NO buttons
         await query.message.reply_audio(
             audio=open(mp3_path, "rb"),
-            title=mp3_path.name,
+            title=title,
             performer=artist_name,
             caption=f"🎧 {artist_name}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            reply_to_message_id=query.message.message_id,
         )
 
         # Delete the status message
@@ -686,8 +812,9 @@ async def back_to_verse_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
     keyboard = [
         [
-            InlineKeyboardButton("🎧 Audio", callback_data=f"play_{sura}_{aya}"),
-            InlineKeyboardButton("📖 Tafsir", callback_data=f"tafsir_{sura}_{aya}"),
+            InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_{aya}"),
+            InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}_{aya}"),
+            InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{aya}"),
         ]
     ]
 
@@ -743,6 +870,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await setting_lang_toggle(update, context)
     elif data == "setting_format_toggle":
         await setting_format_toggle(update, context)
+    elif data == "setting_text_toggle":
+        await setting_text_toggle(update, context)
+    elif data == "setting_tafsir_toggle":
+        await setting_tafsir_toggle(update, context)
     elif data.startswith("voice_list_"):
         await voice_list_handler(update, context)
     elif data.startswith("voice_"):
@@ -753,6 +884,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await stars_handler(update, context)
     elif data.startswith("play_"):
         await play_audio_handler(update, context)
+    elif data.startswith("text_"):
+        await text_handler(update, context)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -22,8 +22,12 @@ def gen_mp3(
     end_sura,
     end_aya,
     title="Quran",
-    artist="Reciter",
+    artist=None,
 ):
+    # Use real voice name if artist is not provided
+    if not artist:
+        artist = voice
+
     range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
     filename = f"{voice}-{range_id}.mp3"
     output_path = output_dir / filename
@@ -55,40 +59,39 @@ def gen_mp3(
                 raise FileNotFoundError(f"Failed to download or find valid file: {path}")
             files.append(path)
 
-    inputs = [ffmpeg.input(str(f)) for f in files]
     output_dir.mkdir(parents=True, exist_ok=True)
-
     temp = output_dir / f"temp_{filename}"
 
-    # FFmpeg concat: v=0 (no video/cover art), a=1 (audio)
-    # metadata: title and artist
+    # Reciter name must be formatted correctly for FFmpeg metadata
+    artist_metadata = f"artist={artist}"
+    title_metadata = f"title={title}"
+
     try:
         if len(files) == 1:
-            # Single file optimization: just add metadata
+            # Single file optimization: add metadata
             (
                 ffmpeg.input(str(files[0]))
                 .output(
                     str(temp),
                     **{
-                        "metadata:g:title": title,
-                        "metadata:g:artist": artist,
+                        "metadata": title_metadata,
+                        "metadata:g:1": artist_metadata,
                         "id3v2_version": "3",
-                        "map": "0:a",
                     },
                 )
                 .overwrite_output()
                 .run(quiet=True)
             )
         else:
+            inputs = [ffmpeg.input(str(f)) for f in files]
             (
                 ffmpeg.concat(*inputs, v=0, a=1)
                 .output(
                     str(temp),
                     **{
-                        "metadata:g:title": title,
-                        "metadata:g:artist": artist,
+                        "metadata": title_metadata,
+                        "metadata:g:1": artist_metadata,
                         "id3v2_version": "3",
-                        "map": "0:a",
                     },
                 )
                 .overwrite_output()
@@ -102,15 +105,15 @@ def gen_mp3(
         try:
             if len(files) == 1:
                 import shutil
-                shutil.copy(str(files[0]), str(temp))
+                shutil.copy(str(files[0]), str(output_path))
             else:
+                inputs = [ffmpeg.input(str(f)) for f in files]
                 (
                     ffmpeg.concat(*inputs, v=0, a=1)
-                    .output(str(temp), **{"map": "0:a"})
+                    .output(str(output_path))
                     .overwrite_output()
                     .run(quiet=True)
                 )
-            temp.rename(output_path)
         except ffmpeg.Error as e2:
             stderr2 = e2.stderr.decode() if e2.stderr else str(e2)
             print(f"Simple concat failed: {stderr2}")
