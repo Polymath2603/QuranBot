@@ -112,21 +112,12 @@ def parse_message(text, quran_data):
             
             info2 = extract_sura_aya(part2, sura_names)
             if info2 and info2.get("sura"):
-                # If both have same sura, it's a normal range
-                if info1["sura"] == info2["sura"]:
-                    return {
-                        "type": "range",
-                        "sura": info1["sura"],
-                        "from_aya": info1.get("aya", 1),
-                        "to_aya": info2.get("aya", 1)
-                    }
-                # Cross-Surah: Surah X ... Surah Y
+                # Always treat as same sura or first sura if they differ (remove cross-surah)
                 return {
-                    "type": "range_cross",
-                    "from_sura": info1["sura"],
+                    "type": "range",
+                    "sura": info1["sura"],
                     "from_aya": info1.get("aya", 1),
-                    "to_sura": info2["sura"],
-                    "to_aya": info2.get("aya", 1)
+                    "to_aya": info2.get("aya", 1) or 1
                 }
             elif not info2:
                  # Check if Part 2 contains a number at all
