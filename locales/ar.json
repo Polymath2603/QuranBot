@@ -23,11 +23,20 @@
     "donate": "💝 تبرع",
     "language": "اللغة",
     "text_format": "تنسيق النص",
-    "settings_title": "⚙️ الإعدادات\n\nالقارئ الحالي: {reciter}\nاللغة: {lang}\nالتنسيق: {fmt}",
+    "settings_title": "⚙️ الإعدادات\n\nالقارئ الحالي: {reciter}\nاللغة: {language}\nالتنسيق: {fmt}",
     "our_channel": "📢 قناتنا",
     "channel_url": "https://t.me/QuranBotChannel",
     "donate_title": "💝 دعم بوت القرآن\n\nدعمكم يساعدنا على استمرار الخادم وإضافة ميزات جديدة.\n\n⭐ **تبرع بنجوم تيليجرام:**",
     "donate_desc": "تبرع لبوت القرآن",
     "donate_thanks": "🎉 شكراً لدعمك! جزاكم الله خيراً.",
-    "donate_manual": "\n\n**طرق أخرى للدعم:**\n🔗 GitHub: github.com/yourusername/qbot\n💳 PayPal: https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS"
+    "stars_50": "⭐ 50 نجمة",
+    "stars_100": "⭐ 100 نجمة",
+    "stars_500": "⭐ 500 نجمة",
+    "donate_manual": "\n\n**طرق أخرى للدعم:**\n🔗 GitHub: github.com/yourusername/qbot\n💳 PayPal: https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS",
+    "options": "الخيارات:",
+    "audio": "🎧 صوت",
+    "verse_format": "📖 {sura_name} ({aya})\n\n﴿ {text} ﴾",
+    "range_format": "📖 {sura_name} ({start}-{end})\n\n{text}",
+    "search_results": "🔍 نتائج البحث:",
+    "result_item": "{sura_name} {sura}:{aya} (صفحة {page})"
 }

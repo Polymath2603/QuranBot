@@ -12,13 +12,21 @@ def download_audio(voice, sura, aya):
     
     path.parent.mkdir(parents=True, exist_ok=True)
     
-    try:
-        print(f"Downloading {sura}:{aya}...")
-        urllib.request.urlretrieve(url, path)
-        return path
-    except Exception as e:
-        print(f"Failed: {e}")
-        return None
+    for attempt in range(3):
+        try:
+            print(f"Downloading {sura}:{aya}... (Attempt {attempt + 1})")
+            # Set a 10-second timeout for the download
+            with urllib.request.urlopen(url, timeout=10) as response:
+                with open(path, "wb") as f:
+                    f.write(response.read())
+            return path
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            if path.exists():
+                path.unlink()  # Delete partial/corrupted file
+            if attempt == 2:
+                return None
+    return None
 
 
 def download_sura(quran_data, voice, sura_num):

@@ -33,7 +33,10 @@ def load_quran_text(data_dir: Path, source: str = "hafs") -> List[str]:
     path = data_dir / "text" / filename
     
     if path.exists():
-        return path.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
+        # Skip license header (first 28 lines) to get exactly 6236 verses
+        # The file has license text at the beginning
+        return lines[28:28+6236]
     
     return []
 

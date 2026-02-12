@@ -23,11 +23,20 @@
     "donate": "💝 Donate",
     "language": "Language",
     "text_format": "Text Format",
-    "settings_title": "⚙️ Settings\n\nCurrent reciter: {reciter}\nLanguage: {lang}\nFormat: {fmt}",
+    "settings_title": "⚙️ Settings\n\nCurrent reciter: {reciter}\nLanguage: {language}\nFormat: {fmt}",
     "our_channel": "📢 Our Channel",
     "channel_url": "https://t.me/QuranBotChannel",
     "donate_title": "💝 Support QBot\n\nYour support helps us maintain the server and add new features.\n\n⭐ **Donate with Telegram Stars:**",
     "donate_desc": "Donation to QBot",
     "donate_thanks": "🎉 Thank you for your support! May Allah reward you.",
-    "donate_manual": "\n\n**Other ways to support:**\n🔗 GitHub: github.com/yourusername/qbot\n💳 PayPal: https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS"
+    "stars_50": "⭐ 50 Stars",
+    "stars_100": "⭐ 100 Stars",
+    "stars_500": "⭐ 500 Stars",
+    "donate_manual": "\n\n**Other ways to support:**\n🔗 GitHub: github.com/yourusername/qbot\n💳 PayPal: https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS",
+    "options": "Options:",
+    "audio": "🎧 Audio",
+    "verse_format": "📖 {sura_name} ({aya})\n\n﴿ {text} ﴾",
+    "range_format": "📖 {sura_name} ({start}-{end})\n\n{text}",
+    "search_results": "🔍 Search Results:",
+    "result_item": "{sura_name} {sura}:{aya} (Page {page})"
 }
