@@ -1,48 +1,34 @@
 import re
 
 def normalize_arabic(text):
-    """Comprehensive Arabic text normalization."""
+    """Comprehensive Arabic text normalization for search."""
+    if not text:
+        return ""
     
-    # 1. Normalize Alif variations to plain Alif
-    # Covers: Alif with Hamza above (أ), Hamza below (إ), Madda (آ), Alif Wasla (ٱ)
+    # 1. Normalize Alif variations
     text = re.sub(r'[إأآٱ]', 'ا', text)
     
-    # 2. Handle standalone Madda mark (ٓ U+0653) - normalize ا + ٓ to ا
-    # This catches cases where Madda appears as a separate combining character
-    # text = re.sub(r'ا\u0653', 'ا', text)
-    
-    # 3. Normalize Alif Maksura (ى) to Ya (ي)
+    # 2. Normalize Alif Maksura (ى) to Ya (ي)
     text = re.sub(r'ى', 'ي', text)
     
-    # 4. Normalize Hamza variations
+    # 3. Normalize Hamza variations
     text = re.sub(r'[ؤئ]', 'ء', text)
     
-    # 5. Normalize Ta Marbuta (ة) to Ha (ه)
-    # text = re.sub(r'ة', 'ه', text)
+    # 4. Normalize Ta Marbuta (ة) to Ha (ه)
+    text = re.sub(r'ة', 'ه', text)
     
-    # 6. Remove all Arabic diacritics (Tashkeel)
-    # U+064B-U+065F includes: Fatha, Damma, Kasra, Sukun, Shadda, Madda (U+0653), Hamza marks, etc.
-    text = re.sub(r'[\u064B-\u065F]', '', text)
+    # 5. Remove all Arabic diacritics (Tashkeel)
+    # Range covers: Fatha, Damma, Kasra, Sukun, Shadda, Madda, Hamza marks, etc.
+    text = re.sub(r'[\u064B-\u065F\u0670]', '', text)
     
-    # 7. Remove Tatweel/Kashida (elongation character ـ)
+    # 6. Remove Tatweel/Kashida (elongation character ـ)
     text = re.sub(r'\u0640', '', text)
     
-    # 8. Normalize Arabic-Indic digits (٠-٩) to Western digits (0-9)
-    # arabic_indic_map = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-    # text = text.translate(arabic_indic_map)
-    
-    # 9. Normalize Extended Arabic-Indic/Farsi digits (۰-۹) to Western digits
-    # farsi_digits_map = str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789')
-    # text = text.translate(farsi_digits_map)
-    
-    # 10. Remove zero-width characters
+    # 7. Remove zero-width characters
     text = re.sub(r'[\u200B\u200C\u200D\uFEFF]', '', text)
     
-    # 11. Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
-    
-    # 12. Strip leading/trailing whitespace
-    text = text.strip()
+    # 8. Normalize whitespace and case (for non-Arabic parts)
+    text = re.sub(r'\s+', ' ', text).lower().strip()
     
     return text
 
