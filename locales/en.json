@@ -25,7 +25,7 @@
     "text_source": "Text Source",
     "tafsir_source": "Tafsir Source",
     "text_format": "Text Format",
-    "settings_title": "⚙️ Settings\n\nCurrent reciter: {reciter}\nLanguage: {language}\nText: {text_source}\nTafsir: {tafsir_source}\nFormat: {fmt}",
+    "settings_title": "⚙️ Settings\n\nCurrent reciter: {reciter}\nLanguage: {language}\nTafsir: {tafsir_source}\nFormat: {fmt}",
     "our_channel": "📢 Our Channel",
     "channel_url": "https://t.me/QuranBotChannel",
     "donate_title": "💝 Support QBot\n\nYour support helps us maintain the server and add new features.\n\n⭐ **Donate with Telegram Stars:**",

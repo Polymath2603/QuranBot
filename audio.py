@@ -29,7 +29,7 @@ def gen_mp3(
         artist = voice
 
     range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
-    filename = f"{voice}-{range_id}.mp3"
+    filename = f"{range_id}.mp3"
     output_path = output_dir / filename
 
     if output_path.exists():
@@ -67,53 +67,34 @@ def gen_mp3(
     title_metadata = f"title={title}"
 
     try:
-        if len(files) == 1:
-            # Single file optimization: add metadata
-            (
-                ffmpeg.input(str(files[0]))
-                .output(
-                    str(temp),
-                    **{
-                        "metadata": title_metadata,
-                        "metadata:g:1": artist_metadata,
-                        "id3v2_version": "3",
-                    },
-                )
-                .overwrite_output()
-                .run(quiet=True)
+        inputs = [ffmpeg.input(str(f)) for f in files]
+        (
+            ffmpeg.concat(*inputs, v=0, a=1)
+            .output(
+                str(temp),
+                **{
+                    "metadata": title_metadata,
+                    "metadata:g:1": artist_metadata,
+                    "id3v2_version": "3",
+                    "map_metadata": "-1", # Strip all original metadata
+                },
             )
-        else:
-            inputs = [ffmpeg.input(str(f)) for f in files]
-            (
-                ffmpeg.concat(*inputs, v=0, a=1)
-                .output(
-                    str(temp),
-                    **{
-                        "metadata": title_metadata,
-                        "metadata:g:1": artist_metadata,
-                        "id3v2_version": "3",
-                    },
-                )
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            .overwrite_output()
+            .run(quiet=True)
+        )
         temp.rename(output_path)
     except ffmpeg.Error as e:
         stderr = e.stderr.decode() if e.stderr else str(e)
         print(f"FFmpeg process failed: {stderr}")
         print("Falling back to simple concat...")
         try:
-            if len(files) == 1:
-                import shutil
-                shutil.copy(str(files[0]), str(output_path))
-            else:
-                inputs = [ffmpeg.input(str(f)) for f in files]
-                (
-                    ffmpeg.concat(*inputs, v=0, a=1)
-                    .output(str(output_path))
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
+            inputs = [ffmpeg.input(str(f)) for f in files]
+            (
+                ffmpeg.concat(*inputs, v=0, a=1)
+                .output(str(output_path), map_metadata="-1")
+                .overwrite_output()
+                .run(quiet=True)
+            )
         except ffmpeg.Error as e2:
             stderr2 = e2.stderr.decode() if e2.stderr else str(e2)
             print(f"Simple concat failed: {stderr2}")
