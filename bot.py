@@ -20,7 +20,6 @@ from config import BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR
 from data import load_quran_data, load_quran_text, get_sura_name, get_sura_aya_count
 from search import search
 from tafsir import get_tafsir
-# from downloader import download_sura
 from audio import gen_mp3
 from database import init_db, get_session, User
 from lang import t
@@ -509,12 +508,7 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    # elif intent["type"] == "range_cross":
-    #     # Handle cross sura range - Logic update needed if we want to print text.
-    #     # For simplicity, just say "Cross surah text not supported yet, use audio" or print multiple blocks?
-    #     await update.message.reply_text(
-    #         "Cross-surah text range not fully supported. Please use specific Surah ranges."
-    #     )
+
 
     elif intent["type"] == "search":
         results = search(quran_data, verses, text)
@@ -674,9 +668,6 @@ async def send_paged_message(message, text, reply_markup=None):
 async def setting_text_toggle(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     # Hidden from UI as requested
     pass
-    # user = get_db_user(update.effective_user)
-    # sources = ["uthmani", "tajweed", "warsh"]
-    # ...
 
 
 async def setting_tafsir_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):

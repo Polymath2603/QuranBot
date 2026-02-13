@@ -32,17 +32,16 @@ A comprehensive Telegram bot for accessing the Quran with advanced features incl
 
 - High-quality MP3 audio from EveryAyah.com
 - Multiple reciters available
-- Audio metadata includes:
-  - **Title**: Surah name and verse range (localized)
-  - **Artist**: Reciter name
-  - No album art (clean audio files)
-- Status messages auto-delete after audio is sent
+- **Metadata**: Includes Title (Sura & Range) and Artist (Reciter).
+- **Clean Audio**: Aggressively strips all original album art and metadata using FFmpeg.
+- **Concise Filenames**: Clean filenames like `001001001007.mp3` (no reciter name suffix).
 
-### 📖 **Text Display**
+### 📖 **Smart Paging & Display**
 
-- Beautiful formatting with Arabic ornamental brackets: `﴿ ... ﴾`
-- Format: `📖 Surah Name (Verse Range)`
-- Verse numbers included in parentheses
+- **10-Ayah Paging**: Automatically paginates long text and tafsir results into 10-aya blocks with easy "Next/Prev" navigation.
+- **In-Place Viewing**: Text and Tafsir are displayed by editing the current message to keep the chat clean.
+- **Simplified Menus**: Selection menus show only sura headers and action buttons to reduce clutter.
+- **Ornamental Brackets**: Beautiful formatting with `﴿ ... ﴾` and verse numbers.
 
 ### 📚 **Tafsir Integration**
 
@@ -108,10 +107,10 @@ QBot/
 ├── data.py             # Quran data loading
 ├── downloader.py       # Audio file downloader
 ├── lang.py             # Localization system
-├── config.py           # Configuration
+├── config.py           # Configuration (Reciters, APIs, Paths)
 ├── locales/            # Language files (en.json, ar.json)
 ├── data/               # Quran data and audio files
-└── output/             # Generated audio files
+└── output/             # Generated audio files (cached)
 ```
 
 ## APIs Used

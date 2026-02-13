@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
 
-def load_quran_data(data_dir: Path) -> Dict[str, Any]:
+def load_quran_data(data_dir: Path) -> dict[str, Any]:
     """Load Quran metadata from JSON or JS files."""
     json_path = data_dir / "metadata" / "quran-data.json"
     js_path   = data_dir / "metadata" / "quran-data.js"
@@ -21,7 +21,7 @@ def load_quran_data(data_dir: Path) -> Dict[str, Any]:
     raise FileNotFoundError("No quran-data.json or quran-data.js found in data/metadata/")
 
 
-def load_quran_text(data_dir: Path, source: str = "hafs") -> List[str]:
+def load_quran_text(data_dir: Path, source: str = "hafs") -> list[str]:
     """Load Quran text from specified source."""
     text_sources = {
         "hafs": "quran-uthmani.txt",
@@ -40,17 +40,10 @@ def load_quran_text(data_dir: Path, source: str = "hafs") -> List[str]:
     return []
 
 
-def load_voices(data_dir: Path) -> Dict[str, str]:
-    """Load available voice reciters."""
-    voices_path = data_dir / "metadata" / "voices.json"
-    
-    if voices_path.exists():
-        return json.loads(voices_path.read_text(encoding="utf-8"))
-    
-    return {}
 
 
-def get_sura_name(quran_data: Dict[str, Any], sura_num: int, lang: str = "ar") -> str:
+
+def get_sura_name(quran_data: dict[str, Any], sura_num: int, lang: str = "ar") -> str:
     """Get sura name in specified language."""
     entry = quran_data["Sura"][sura_num]
     
@@ -59,12 +52,12 @@ def get_sura_name(quran_data: Dict[str, Any], sura_num: int, lang: str = "ar") -
     return entry[5] if len(entry) > 5 else entry[4] if len(entry) > 4 else f"Sura {sura_num}"
 
 
-def get_sura_aya_count(quran_data: Dict[str, Any], sura_num: int) -> int:
+def get_sura_aya_count(quran_data: dict[str, Any], sura_num: int) -> int:
     """Get number of ayas in specified sura."""
     return int(quran_data["Sura"][sura_num][1])
 
 
-def get_page(quran_data: Dict[str, Any], sura: int, aya: int) -> int:
+def get_page(quran_data: dict[str, Any], sura: int, aya: int) -> int:
     """Get page number for specified sura and aya."""
     pages = quran_data.get("Page", [])
     for page_num in range(1, len(pages)):

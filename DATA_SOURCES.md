@@ -150,19 +150,14 @@ https://everyayah.com/data/Alafasy_64kbps/1/001001.mp3
 
 ```
 data/audio/
-├── Alafasy_64kbps/
-│   ├── 1/
-│   │   ├── 001001.mp3  (Surah 1, Verse 1)
-│   │   ├── 001002.mp3  (Surah 1, Verse 2)
-│   │   └── ...
-│   ├── 2/
-│   │   ├── 002001.mp3
-│   │   └── ...
-│   └── ...
-├── Husary_64kbps/
-│   └── ...
 └── .gitkeep
 ```
+
+### Reciters List
+
+Stored in `config.py` in the `VOICES` dictionary.
+
+````
 
 ### Download Logic
 
@@ -195,7 +190,7 @@ def download_sura(quran_data, voice, sura):
             return None  # Abort on failure
 
     return files
-```
+````
 
 ### Download Strategy
 
@@ -230,8 +225,10 @@ output/
 ### Filename Format
 
 ```
-{reciter}-{start_surah:03d}{start_verse:03d}{end_surah:03d}{end_verse:03d}.mp3
+{start_surah:03d}{start_verse:03d}{end_surah:03d}{end_verse:03d}.mp3
 ```
+
+_(Reciter name suffix was removed for better compatibility)_
 
 ### Generation Logic
 
@@ -441,17 +438,12 @@ def get_db_user(telegram_user):
 QBot/
 ├── data/                          # All Quran data
 │   ├── metadata/
-│   │   ├── quran-data.json       ✅ Bundled (required)
-│   │   └── voices.json           ✅ Bundled (optional)
+│   │   └── quran-data.json       ✅ Bundled (required)
 │   ├── text/
 │   │   ├── quran-uthmani.txt     ✅ Bundled (required)
 │   │   ├── quran-tajweed.txt     ⚪ Bundled (optional)
 │   │   └── quran-warsh.txt       ⚪ Bundled (optional)
 │   ├── audio/                    🔽 Downloaded on-demand
-│   │   ├── Alafasy_64kbps/
-│   │   ├── Husary_64kbps/
-│   │   └── .gitkeep
-│   ├── users/                    📝 User-specific data (future)
 │   │   └── .gitkeep
 │   └── qbot.db                   💾 SQLite database (auto-created)
 ├── output/                        🎵 Generated MP3 files (cached)
