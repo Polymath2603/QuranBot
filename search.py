@@ -15,7 +15,7 @@ def normalize_arabic(text):
     text = re.sub(r'[ؤئ]', 'ء', text)
     
     # 4. Normalize Ta Marbuta (ة) to Ha (ه)
-    text = re.sub(r'ة', 'ه', text)
+    # text = re.sub(r'ة', 'ه', text)
     
     # 5. Remove all Arabic diacritics (Tashkeel)
     # Range covers: Fatha, Damma, Kasra, Sukun, Shadda, Madda, Hamza marks, etc.
@@ -73,9 +73,14 @@ def get_location(quran_data, verse_index):
 
 def get_page(quran_data, sura, aya):
     for page_num, page_data in enumerate(quran_data.get("Page", []), 1):
-        if not page_data or len(page_data) < 2:
+        if not page_data or len(page_data) < 1:
             continue
         p_sura, p_aya = page_data[0], page_data[1]
         if p_sura > sura or (p_sura == sura and p_aya > aya):
-            return page_num - 1
+            return page_num - 2
     return 604
+
+
+
+
+    
