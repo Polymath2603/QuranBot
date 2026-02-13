@@ -465,13 +465,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sura = intent["sura"]
         aya = intent["aya"]
         sura_name = get_sura_name(quran_data, sura, lang)
-
-        start_index = int(quran_data["Sura"][sura][0])
-        verse_index = start_index + aya - 1
-        verse_text = verses[verse_index]
-
-        # New Format: 📖 Sura (Aya) \n\n ﴿ Text ﴾
-        response = f"📖 {sura_name} ({aya})\n\n﴿ {verse_text} ﴾"
+        
+        # Simplified: Title only, no text
+        response = f"📖 {sura_name} ({aya})"
 
         # Text Button Visibility
         fmt = user.get_preference("text_format", "msg")
@@ -496,16 +492,7 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         is_full = (start == 1 and end == count)
         title = f"📖 {sura_name}" if is_full else f"📖 {sura_name} ({start}-{end})"
-        response = f"{title}\n\n"
-
-        start_index = int(quran_data["Sura"][sura][0])
-
-        full_text = "﴿ "
-        for i in range(start, end + 1):
-            verse_index = start_index + i - 1
-            if verse_index < len(verses):
-                full_text += f"{verses[verse_index]} ﴿{i}﴾ "
-        full_text += "﴾"
+        response = title # Simplified: Title only
 
         # Audio range option
         fmt = user.get_preference("text_format", "msg")
@@ -518,16 +505,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if fmt != "off": keyboard_buttons.insert(1, text_btn)
         
         keyboard = [keyboard_buttons]
-
-        if len(response + full_text) < 4000:
-            await update.message.reply_text(
-                response + full_text, reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            await update.message.reply_text(
-                response + "...", # Text handled by text_handler anyway
-                reply_markup=InlineKeyboardMarkup(keyboard),
-            )
+        await update.message.reply_text(
+            response, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     # elif intent["type"] == "range_cross":
     #     # Handle cross sura range - Logic update needed if we want to print text.
@@ -581,6 +561,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data.split("_")
     sura = int(data[1])
+    start = int(data[2])
+    end = int(data[3]) if len(data) > 3 else start
+    
+    # 10-Aya Paging
+    current_start = int(data[4]) if len(data) > 4 else start
+    current_end = min(current_start + 9, end)
     
     user = get_db_user(update.effective_user)
     lang = user.language
@@ -590,28 +576,18 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if fmt == "off":
         return
 
-    count = get_sura_aya_count(quran_data, sura)
     sura_name = get_sura_name(quran_data, sura, lang)
+    start_index = int(quran_data["Sura"][sura][0])
     
-    if len(data) == 3: # single aya
-        aya = int(data[2])
-        start_index = int(quran_data["Sura"][sura][0])
-        verse_text = verses[start_index + aya - 1]
-        title = f"{sura_name} ({aya})"
-        response = f"📖 {title}\n\n﴿ {verse_text} ﴾"
-        start, end = aya, aya
-    else: # range
-        start = int(data[2])
-        end = int(data[3])
-        is_full = (start == 1 and end == count)
-        title = f"{sura_name}" if is_full else f"{sura_name} ({start}-{end})"
-        
-        start_index = int(quran_data["Sura"][sura][0])
-        full_text = "﴿ "
-        for i in range(start, end + 1):
-            full_text += f"{verses[start_index + i - 1]} ﴿{i}﴾ "
-        full_text += "﴾"
-        response = f"📖 {title}\n\n{full_text}"
+    # Text Construction
+    if start == end:
+        title = f"{sura_name} ({start})"
+        response = f"📖 {title}\n\n﴿ {verses[start_index + start - 1]} ﴾"
+    else:
+        title = f"{sura_name} ({start}-{end})"
+        response = f"📖 {sura_name} ({current_start}-{current_end})\n\n"
+        for i in range(current_start, current_end + 1):
+            response += f"﴿ {verses[start_index + i - 1]} ﴾ ﴿{i}﴾ "
 
     # Handle File Formats
     if fmt in ["srt", "lrc", "txt"]:
@@ -621,26 +597,21 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         content = ""
         
         if fmt == "txt":
-            content = response
+            # Export FULL range to text file
+            full_txt = f"📖 {sura_name} ({start}-{end})\n\n"
+            for i in range(start, end + 1):
+                full_txt += f"﴿ {verses[start_index + i - 1]} ﴾ ﴿{i}﴾ "
+            content = full_txt
         elif fmt == "srt":
-            if len(data) == 3:
-                aya = int(data[2])
-                content = f"1\n00:00:00,000 --> 00:00:10,000\n{verses[start_index + aya - 1]}"
-            else:
-                for i, val in enumerate(range(start, end + 1), 1):
-                    start_time = f"00:00:{i*10:02d},000"
-                    end_time = f"00:00:{(i+1)*10:02d},000"
-                    content += f"{i}\n{start_time} --> {end_time}\n{verses[start_index + val - 1]}\n\n"
+            for i, val in enumerate(range(start, end + 1), 1):
+                start_time = f"00:00:{i*10:02d},000"
+                end_time = f"00:00:{(i+1)*10:02d},000"
+                content += f"{i}\n{start_time} --> {end_time}\n{verses[start_index + val - 1]}\n\n"
         elif fmt == "lrc":
-            if len(data) == 3:
-                aya = int(data[2])
-                content = f"[00:00.00]{verses[start_index + aya - 1]}\n"
-            else:
-                for val in range(start, end + 1):
-                    # Rough estimate: 10s per aya
-                    idx = val - start
-                    start_time = f"[{idx//6:02d}:{(idx*10)%60:02d}.00]"
-                    content += f"{start_time}{verses[start_index + val - 1]}\n"
+            for val in range(start, end + 1):
+                idx = val - start
+                start_time = f"[{idx//6:02d}:{(idx*10)%60:02d}.00]"
+                content += f"{start_time}{verses[start_index + val - 1]}\n"
         
         from io import BytesIO
         bio = BytesIO(content.encode("utf-8"))
@@ -649,17 +620,24 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if fmt != "txt" or len(response) <= 4000: return 
 
-    # Handle msg format or long txt (In-place if possible)
+    # Navigation for 10-aya paging
+    nav = []
+    if start != end:
+        if current_start > start:
+            prev_start = max(start, current_start - 10)
+            nav.append(InlineKeyboardButton("◀️", callback_data=f"textpage_{sura}_{start}_{end}_{prev_start}"))
+        if current_end < end:
+            next_start = current_end + 1
+            nav.append(InlineKeyboardButton("▶️", callback_data=f"textpage_{sura}_{start}_{end}_{next_start}"))
+
     back_data = f"verse_back_{sura}_{start}_{end}" if start != end else f"verse_back_{sura}_{start}"
-    keyboard = [[InlineKeyboardButton(t("back", lang), callback_data=back_data)]]
+    keyboard = []
+    if nav: keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton(t("back", lang), callback_data=back_data)])
     
     if len(response) <= 4000:
         await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        # Paged messages can't be edited easily in-place (one by one?), 
-        # so we send new messages but might delete the old one or just reply.
-        # User requested "show text like tafsir shows" which implies in-place.
-        # If too long for one message, we split.
         await send_paged_message(query.message, response, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
@@ -676,7 +654,7 @@ async def send_paged_message(message, text, reply_markup=None):
     # We only apply reply_markup to the FIRST message if it's an edit-like view?
     # Or usually "Back" should be at the end. Let's put it on the LAST message.
     
-    for i, part in enumerate(parts):
+    for part in parts:
         if not part.strip(): continue
         
         # Add back the ornament
@@ -693,7 +671,7 @@ async def send_paged_message(message, text, reply_markup=None):
         await message.reply_text(current_msg, reply_markup=reply_markup)
 
 
-async def setting_text_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def setting_text_toggle(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     # Hidden from UI as requested
     pass
     # user = get_db_user(update.effective_user)
@@ -793,23 +771,25 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.message.reply_text(f"Error: {e}")
     finally:
         # Delete the status message always after completion or error
-        try:
-            await status_msg.delete()
-        except:
-            pass
+        if status_msg:
+            try:
+                # Sync-triggering edit for mobile clients
+                await status_msg.edit_text(".")
+                await status_msg.delete()
+            except:
+                pass
 
 
 async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     parts = query.data.split("_")
     sura = int(parts[1])
-    start_aya = int(parts[2])
-    end_aya = int(parts[3]) if len(parts) > 3 else start_aya
+    start = int(parts[2])
+    end = int(parts[3]) if len(parts) > 3 else start
     
-    # Track current aya in range
-    current_aya = context.user_data.get("tafsir_aya", start_aya)
-    if f"tafsir_{sura}_{start_aya}" in query.data:
-        current_aya = start_aya
+    # 10-Aya Paging
+    current_start = int(parts[4]) if len(parts) > 4 else start
+    current_end = min(current_start + 9, end)
     
     user = get_db_user(update.effective_user)
     lang = str(user.language)
@@ -819,18 +799,27 @@ async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sura_name = get_sura_name(quran_data, sura, lang)
     
-    if start_aya == end_aya:
-        tafsir_text = get_tafsir(sura, current_aya) or "Tafsir not found."
-        text = f"📖 {sura_name} ({current_aya}) - {t('tafsir', lang)}\n\n{tafsir_text}"
+    if start == end:
+        tafsir_text = get_tafsir(sura, start) or "Tafsir not found."
+        text = f"📖 {sura_name} ({start}) - {t('tafsir', lang)}\n\n{tafsir_text}"
     else:
-        # Show all tafsir text for the range
-        text = f"📖 {sura_name} ({start_aya}-{end_aya}) - {t('tafsir', lang)}\n\n"
-        for aya in range(start_aya, end_aya + 1):
+        text = f"📖 {sura_name} ({current_start}-{current_end}) - {t('tafsir', lang)}\n\n"
+        for aya in range(current_start, current_end + 1):
             aya_tafsir = get_tafsir(sura, aya) or "Tafsir not found."
             text += f"﴿{aya}﴾ {aya_tafsir}\n\n"
 
+    nav = []
+    if current_start > start:
+        prev_start = max(start, current_start - 10)
+        nav.append(InlineKeyboardButton("◀️", callback_data=f"tafpage_{sura}_{start}_{end}_{prev_start}"))
+    if current_end < end:
+        next_start = current_end + 1
+        nav.append(InlineKeyboardButton("▶️", callback_data=f"tafpage_{sura}_{start}_{end}_{next_start}"))
+
     keyboard = []
-    back_data = f"verse_back_{sura}_{start_aya}_{end_aya}" if start_aya != end_aya else f"verse_back_{sura}_{start_aya}"
+    if nav: keyboard.append(nav)
+    
+    back_data = f"verse_back_{sura}_{start}_{end}" if start != end else f"verse_back_{sura}_{start}"
     keyboard.append([InlineKeyboardButton(t("back", lang), callback_data=back_data)])
 
     if len(text) <= 4000:
@@ -839,7 +828,7 @@ async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_paged_message(query.message, text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-async def back_to_verse_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def back_to_verse_handler(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     parts = query.data.split("_")
     sura = int(parts[2])
@@ -856,32 +845,24 @@ async def back_to_verse_handler(update: Update, context: ContextTypes.DEFAULT_TY
     count = get_sura_aya_count(quran_data, sura)
     is_full = (start == 1 and end == count)
     
-    title = sura_name if is_full else (f"{sura_name} ({start}-{end})" if start != end else f"{sura_name} ({start})")
-    
-    start_index = int(quran_data["Sura"][sura][0])
-    
-    if start == end:
-        verse_text = verses[start_index + start - 1]
-        response = f"📖 {title}\n\n﴿ {verse_text} ﴾"
-    else:
-        full_text = "﴿ "
-        for i in range(start, end + 1):
-            full_text += f"{verses[start_index + i - 1]} ﴿{i}﴾ "
-        full_text += "﴾"
-        response = f"📖 {title}\n\n{full_text}"
+    # Simplify: Title only, no text
+    title = f"📖 {sura_name}" if is_full else (f"📖 {sura_name} ({start}-{end})" if start != end else f"📖 {sura_name} ({start})")
+    response = title
 
-    keyboard = [
-        [
-            InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_{start}_{end}"),
-            InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}_{start}_{end}"),
-            InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}"),
-        ]
+    # Text Button Visibility
+    fmt = user.get_preference("text_format", "msg")
+    text_btn = InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}_{start}_{end}")
+
+    keyboard_buttons = [
+        InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_{start}_{end}"),
+        InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}"),
     ]
+    if fmt != "off": keyboard_buttons.insert(1, text_btn)
 
-    await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup([keyboard_buttons]))
 
 
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def main_menu(update: Update, _context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
         await query.answer()
@@ -945,7 +926,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await donate_handler(update, context)
     elif data.startswith("stars_"):
         await stars_handler(update, context)
-    elif data.startswith("tafnav_"):
+    elif data.startswith("tafpage_"):
+        await tafsir_handler(update, context)
+    elif data.startswith("textpage_"):
+        await text_handler(update, context)
+    elif data.startswith("tafnav_"): # legacy or single-view navigation
         parts = data.split("_")
         context.user_data["tafsir_aya"] = int(parts[4])
         await tafsir_handler(update, context)

@@ -76,7 +76,8 @@ def gen_mp3(
                     "metadata": title_metadata,
                     "metadata:g:1": artist_metadata,
                     "id3v2_version": "3",
-                    "map_metadata": "-1", # Strip all original metadata
+                    "map_metadata": "-1",
+                    "vn": None,  # Disable video (strips album art)
                 },
             )
             .overwrite_output()

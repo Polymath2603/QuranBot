@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, JSON, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from config import DATA_DIR
 
@@ -19,9 +19,9 @@ class User(Base):
     voice = Column(String, default="Alafasy_64kbps")
     text_source = Column(String, default="uthmani")
     tafsir_source = Column(String, default="muyassar")
-    preferences = Column(JSON, default=lambda: {"text_format": "txt"})  # txt, lrc, srt
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    preferences = Column(JSON, default=lambda: {"text_format": "msg"})  # msg, txt, lrc, srt, off
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def set_preference(self, key, value):
         prefs = dict(self.preferences) if self.preferences else {}
