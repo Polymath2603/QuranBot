@@ -4,7 +4,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     LabeledPrice,
-    PreCheckoutQuery,
 )
 from telegram.ext import (
     Application,
@@ -15,7 +14,6 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-import json
 import asyncio
 import logging
 from config import BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR
@@ -23,7 +21,7 @@ from data import load_quran_data, load_quran_text, get_sura_name, get_sura_aya_c
 from search import search
 from tafsir import get_tafsir
 # from downloader import download_sura
-from audio import gen_mp3, get_audio_file
+from audio import gen_mp3
 from database import init_db, get_session, User
 from lang import t
 from nlu import parse_message
@@ -71,10 +69,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user.language
 
     keyboard = [
-        [InlineKeyboardButton(t("search", lang), callback_data="menu_search")],
-        [InlineKeyboardButton(t("settings", lang), callback_data="menu_settings")],
-        [InlineKeyboardButton(t("donate", lang), callback_data="menu_donate")],
-        [InlineKeyboardButton(t("our_channel", lang), url=t("channel_url", lang))],
+        [
+            InlineKeyboardButton(t("search", lang), callback_data="menu_search"),
+            InlineKeyboardButton(t("settings", lang), callback_data="menu_settings")
+        ], [
+            InlineKeyboardButton(t("donate", lang), callback_data="menu_donate"),
+            InlineKeyboardButton(t("our_channel", lang), url=t("channel_url", lang))
+        ],
     ]
 
     await update.message.reply_text(
@@ -290,7 +291,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang,
         reciter=reciter_name,
         language=lang_name,
-        text_source=t(user.text_source, lang),
+        # text_source=t(user.text_source, lang),
         tafsir_source=tafsir_src_name,
         fmt=fmt,
     )
