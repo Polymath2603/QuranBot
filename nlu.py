@@ -62,6 +62,13 @@ def parse_message(text, quran_data):
     text = re.sub(r"(to|الي|إلي|حتي|الى|إلى|حتى)\s+", "TO ", text, flags=re.IGNORECASE)
     # text = re.sub(r"(surah|sura|سورة|سوره)\s+", "SURAH ", text, flags=re.IGNORECASE) # Handled in helper
     
+    # Page detection
+    page_match = re.search(r"(page|صفحة)\s+(\d+)", text, flags=re.IGNORECASE)
+    if page_match:
+        page_num = int(page_match.group(2))
+        if 1 <= page_num <= 604:
+            return {"type": "page", "page": page_num}
+            
     # Support "Sura 1:3" or "1:3"
     match = re.search(r"(\d+):(\d+)(?:-(\d+))?", original_text)
     if match:

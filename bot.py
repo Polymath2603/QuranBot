@@ -525,6 +525,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(response)
 
+    elif intent["type"] == "page":
+        await page_handler(update, context, intent["page"])
+
     elif intent["type"] == "surah":
         sura = intent["sura"]
         name = get_sura_name(quran_data, sura, lang)
@@ -633,6 +636,84 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await send_paged_message(query.message, response, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, page_num: int = None):
+    """Display verses for a specific Quran page."""
+    if update.callback_query:
+        query = update.callback_query
+        try:
+            await query.answer()
+        except Exception:
+            pass
+        if page_num is None:
+            page_num = int(query.data.split("_")[1])
+    else:
+        query = None
+
+    user = get_db_user(update.effective_user)
+    lang = user.language
+
+    # Collect verses on this page
+    pages = quran_data.get("Page", [])
+    if page_num < 1 or page_num >= len(pages):
+        return
+
+    start_sura, start_aya = pages[page_num]
+    if page_num + 1 < len(pages):
+        end_sura, end_aya = pages[page_num + 1]
+        # Move back one ayah
+        if end_aya > 1:
+            end_aya -= 1
+        else:
+            end_sura -= 1
+            end_aya = get_sura_aya_count(quran_data, end_sura)
+    else:
+        end_sura = 114
+        end_aya = get_sura_aya_count(quran_data, 114)
+
+    # Build the page content
+    response = f"📖 {t('page', lang)} {page_num}\n\n"
+    
+    current_sura = start_sura
+    current_aya = start_aya
+    
+    while True:
+        s_name = get_sura_name(quran_data, current_sura, lang)
+        if current_aya == 1:
+            response += f"\n✨ {s_name} ✨\n"
+            
+        s_idx = int(quran_data["Sura"][current_sura][0])
+        verse_text = verses[s_idx + current_aya - 1]
+        response += f"﴿ {verse_text} ﴾ ﴿{current_aya}﴾ "
+        
+        if current_sura == end_sura and current_aya == end_aya:
+            break
+            
+        current_aya += 1
+        if current_aya > get_sura_aya_count(quran_data, current_sura):
+            current_sura += 1
+            current_aya = 1
+            if current_sura > 114:
+                break
+
+    # Navigation buttons
+    keyboard = []
+    nav = []
+    if page_num > 1:
+        nav.append(InlineKeyboardButton("◀️", callback_data=f"page_{page_num - 1}"))
+    if page_num < 604:
+        nav.append(InlineKeyboardButton("▶️", callback_data=f"page_{page_num + 1}"))
+    if nav:
+        # Flip navigation for RTL if needed, but usually ◀️ is prev and ▶️ is next
+        keyboard.append(nav)
+    
+    keyboard.append([InlineKeyboardButton(t("back", lang), callback_data="menu_main")])
+
+    if query:
+        await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update.message.reply_text(response, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def send_paged_message(message, text, reply_markup=None):
@@ -907,6 +988,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await setting_format_toggle(update, context)
     # elif data == "setting_text_toggle":
     #     await setting_text_toggle(update, context)
+    elif data.startswith("page_"):
+        await page_handler(update, context)
     elif data == "setting_tafsir_toggle":
         await setting_tafsir_toggle(update, context)
     elif data.startswith("voice_list_"):
