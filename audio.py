@@ -30,7 +30,9 @@ def gen_mp3(
 
     range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
     filename = f"{range_id}.mp3"
-    output_path = output_dir / filename
+    voice_output_dir = output_dir / voice
+    voice_output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = voice_output_dir / filename
 
     if output_path.exists():
         return output_path

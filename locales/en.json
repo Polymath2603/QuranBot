@@ -48,5 +48,16 @@
     "muyassar": "Muyassar",
     "jalalayn": "Jalalayn",
     "qurtubi": "Qurtubi",
-    "ibn-kathir": "Ibn Kathir"
+    "ibn-kathir": "Ibn Kathir",
+    "video": "🎬 Video (Beta)",
+    "video_settings": "🎬 Video Settings",
+    "video_bg": "Background",
+    "video_color": "Text Color",
+    "video_border": "Border",
+    "generating_video": "⏳ Generating video...",
+    "on": "On",
+    "off_label": "Off",
+    "black": "Black",
+    "white": "White",
+    "random": "Random"
 }

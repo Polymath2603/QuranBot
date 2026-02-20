@@ -1,11 +1,12 @@
 # QBot: Quran Telegram Bot
 
-A Telegram bot for accessing the Quran — browse by verse, range, or page; listen to recitations; and read Tafsir.
+A Telegram bot for accessing the Quran — browse by verse, range, or page; listen to recitations; watch verse videos; and read Tafsir.
 
 ## Features
 
 - **Natural Language Search**: Accepts queries in Arabic and English (e.g., `Baqarah 255`, `صفحة 10`, `1:1-5`).
-- **Audio Playback**: Stream or download recitations from multiple reciters with embedded metadata (title, artist).
+- **Audio Playback**: Stream or download recitations from multiple reciters with embedded metadata.
+- **Video Generation** _(Beta)_: Create MP4 videos of verses with timed subtitles, configurable backgrounds and text styling.
 - **Tafsir**: Access verse interpretations fetched from AlQuran.cloud.
 - **Page Navigation**: Browse all 604 pages of the Quran with ◀️/▶️ buttons.
 - **Text Export**: Export verses as TXT, SRT, or LRC files.
@@ -27,14 +28,15 @@ python bot.py
 - **Range**: `1:1-7` or `Al-Fatihah 1 to 7`
 - **Full Surah**: `Kahf` or `سورة الكهف`
 - **By page**: `page 1` or `صفحة 200`
-- **Search**: `الرحمن`
+- **Search**: Any text is auto-detected as search
 
 ## Data Sources
 
-| File                | Source                                                                                                    |
-| ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `quran-data.json`   | [tanzil.net](https://tanzil.net) — downloaded as `quran-data.js`, reformatted to JSON without any changes |
-| `quran-uthmani.txt` | [tanzil.net](https://tanzil.net) — used as-is                                                             |
+| File                | Source                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `quran-data.json`   | [tanzil.net](https://tanzil.net) — downloaded as `quran-data.js`, reformatted to JSON without changes |
+| `quran-uthmani.txt` | [tanzil.net](https://tanzil.net) — used as-is                                                         |
+| `UthmanTN_v2-0.ttf` | Uthmani font for video text rendering                                                                 |
 
 ## APIs
 
@@ -50,6 +52,7 @@ QBot/
 ├── bot.py          # Bot logic and Telegram handlers
 ├── nlu.py          # Query parsing (verse, range, page, search)
 ├── audio.py        # FFmpeg audio concatenation and metadata
+├── video.py        # MP4 video generation with timed subtitles
 ├── search.py       # Arabic-normalizing full-text search
 ├── tafsir.py       # Tafsir fetching with local cache
 ├── data.py         # Quran data and text loading
@@ -61,8 +64,9 @@ QBot/
 ├── data/
 │   ├── quran-data.json
 │   ├── quran-uthmani.txt
+│   ├── UthmanTN_v2-0.ttf
 │   └── audio/      # Cached per-verse MP3s
-└── output/         # Generated combined MP3s
+└── output/         # Generated MP3s and MP4s
 ```
 
 ## Support

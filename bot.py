@@ -21,6 +21,7 @@ from data import load_quran_data, load_quran_text, get_sura_name, get_sura_aya_c
 from search import search
 from tafsir import get_tafsir
 from audio import gen_mp3
+from video import gen_video
 from database import init_db, get_session, User
 from lang import t
 from nlu import parse_message
@@ -69,10 +70,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton(t("search", lang), callback_data="menu_search"),
-            InlineKeyboardButton(t("settings", lang), callback_data="menu_settings")
-        ], [
+            InlineKeyboardButton(t("settings", lang), callback_data="menu_settings"),
             InlineKeyboardButton(t("donate", lang), callback_data="menu_donate"),
+        ], [
             InlineKeyboardButton(t("our_channel", lang), url=t("channel_url", lang))
         ],
     ]
@@ -147,7 +147,8 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_1_{count}"),
             InlineKeyboardButton(t("text", lang), callback_data=f"text_{sura}_1_{count}"),
             InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_1_{count}"),
-        ]
+        ],
+        [InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_1_{count}")]
     ]
     await query.edit_message_text(
         response, reply_markup=InlineKeyboardMarkup(keyboard)
@@ -277,6 +278,9 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         callback_data="setting_tafsir_toggle",
     )
     keyboard.append([tafsir_btn])
+
+    # Video settings button
+    keyboard.append([InlineKeyboardButton(t("video_settings", lang), callback_data="menu_video_settings")])
 
     # Reciter selection header
     keyboard.append(
@@ -477,9 +481,10 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{aya}"),
         ]
         if fmt != "off": keyboard_buttons.insert(1, text_btn)
+        video_row = [InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_{aya}")]
 
         await update.message.reply_text(
-            response, reply_markup=InlineKeyboardMarkup([keyboard_buttons])
+            response, reply_markup=InlineKeyboardMarkup([keyboard_buttons, video_row])
         )
 
     elif intent["type"] == "range":
@@ -502,8 +507,9 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}")
         ]
         if fmt != "off": keyboard_buttons.insert(1, text_btn)
+        video_row = [InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_{start}_{end}")]
         
-        keyboard = [keyboard_buttons]
+        keyboard = [keyboard_buttons, video_row]
         await update.message.reply_text(
             response, reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -543,9 +549,10 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_1_{count}"),
         ]
         if fmt != "off": keyboard_buttons.insert(1, text_btn)
+        video_row = [InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_1_{count}")]
 
         await update.message.reply_text(
-            response, reply_markup=InlineKeyboardMarkup([keyboard_buttons])
+            response, reply_markup=InlineKeyboardMarkup([keyboard_buttons, video_row])
         )
 
 
@@ -852,6 +859,161 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 pass
 
 
+async def video_generate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle video generation callback: vid_sura_start_end or vid_sura_aya."""
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    data = query.data.split("_")  # vid_sura_aya or vid_sura_start_end
+    sura = int(data[1])
+    start_aya = int(data[2])
+    end_aya = int(data[3]) if len(data) > 3 else start_aya
+
+    user = get_db_user(update.effective_user)
+    lang = str(user.language)
+    voice = user.voice or "Alafasy_64kbps"
+
+    if not query.message:
+        return
+
+    sura_name = get_sura_name(quran_data, sura, lang)
+    count = get_sura_aya_count(quran_data, sura)
+    is_full = (start_aya == 1 and end_aya == count)
+    title = sura_name if is_full else (
+        f"{sura_name} ({start_aya}-{end_aya})"
+        if start_aya != end_aya
+        else f"{sura_name} ({start_aya})"
+    )
+
+    status_msg = await query.message.reply_text(t("generating_video", lang))
+
+    try:
+        # Get localized reciter name
+        voice_info = VOICES.get(voice, {"en": "Reciter", "ar": "قارئ"})
+        artist_name = voice_info.get(lang, voice_info.get("en", "Reciter"))
+
+        # Generate audio first
+        mp3_path = await asyncio.to_thread(
+            gen_mp3,
+            DATA_DIR / "audio",
+            OUTPUT_DIR,
+            quran_data,
+            voice,
+            sura, start_aya,
+            sura, end_aya,
+            title=title,
+            artist=artist_name,
+        )
+
+        # Get verses for subtitles
+        start_index = int(quran_data["Sura"][sura][0])
+        verse_texts = [verses[start_index + i - 1] for i in range(start_aya, end_aya + 1)]
+
+        # Video prefs
+        bg_mode = user.get_preference("video_bg", "black")
+        text_color = user.get_preference("video_color", "white")
+        border = user.get_preference("video_border", "on") == "on"
+
+        video_path = await asyncio.to_thread(
+            gen_video,
+            verse_texts,
+            start_aya,
+            title,
+            audio_path=mp3_path,
+            output_dir=OUTPUT_DIR / "video",
+            bg_mode=bg_mode,
+            text_color_name=text_color,
+            border=border,
+        )
+
+        clean_title = title.replace("/", "-").replace(":", "-")
+        with open(video_path, "rb") as vf:
+            await query.message.reply_video(
+                video=vf,
+                caption=f"🎬 {title} — {artist_name}",
+                filename=f"{clean_title}.mp4",
+            )
+
+    except Exception as e:
+        await query.message.reply_text(f"Error: {e}")
+    finally:
+        if status_msg:
+            try:
+                await status_msg.edit_text(".")
+                await status_msg.delete()
+            except:
+                pass
+
+
+async def video_settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show video settings submenu."""
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    user = get_db_user(update.effective_user)
+    lang = str(user.language)
+
+    bg = user.get_preference("video_bg", "black")
+    color = user.get_preference("video_color", "white")
+    border = user.get_preference("video_border", "on")
+
+    bg_label = t(bg, lang)
+    color_label = t(color, lang)
+    border_label = t("on" if border == "on" else "off_label", lang)
+
+    keyboard = [
+        [InlineKeyboardButton(f"{t('video_bg', lang)}: {bg_label}", callback_data="vtoggle_bg")],
+        [InlineKeyboardButton(f"{t('video_color', lang)}: {color_label}", callback_data="vtoggle_color")],
+        [InlineKeyboardButton(f"{t('video_border', lang)}: {border_label}", callback_data="vtoggle_border")],
+        [InlineKeyboardButton(t("back", lang), callback_data="menu_settings")],
+    ]
+
+    await query.edit_message_text(
+        t("video_settings", lang),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def video_toggle_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle a video setting and refresh the video settings menu."""
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    user = get_db_user(update.effective_user)
+    session = get_session()
+    db_user = session.query(User).filter_by(telegram_id=update.effective_user.id).first()
+
+    key = query.data  # vtoggle_bg, vtoggle_color, vtoggle_border
+
+    if key == "vtoggle_bg":
+        current = db_user.get_preference("video_bg", "black")
+        new_val = "random" if current == "black" else "black"
+        db_user.set_preference("video_bg", new_val)
+    elif key == "vtoggle_color":
+        current = db_user.get_preference("video_color", "white")
+        new_val = "black" if current == "white" else "white"
+        db_user.set_preference("video_color", new_val)
+    elif key == "vtoggle_border":
+        current = db_user.get_preference("video_border", "on")
+        new_val = "off" if current == "on" else "on"
+        db_user.set_preference("video_border", new_val)
+
+    session.commit()
+    session.close()
+
+    # Re-render settings
+    await video_settings_handler(update, context)
+
+
 async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     parts = query.data.split("_")
@@ -930,8 +1092,9 @@ async def back_to_verse_handler(update: Update, _context: ContextTypes.DEFAULT_T
         InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}"),
     ]
     if fmt != "off": keyboard_buttons.insert(1, text_btn)
+    video_row = [InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_{start}_{end}")]
 
-    await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup([keyboard_buttons]))
+    await query.edit_message_text(response, reply_markup=InlineKeyboardMarkup([keyboard_buttons, video_row]))
 
 
 async def main_menu(update: Update, _context: ContextTypes.DEFAULT_TYPE):
@@ -946,10 +1109,9 @@ async def main_menu(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
-            InlineKeyboardButton(t("search", lang), callback_data="menu_search"),
-            InlineKeyboardButton(t("settings", lang), callback_data="menu_settings")
-        ], [
+            InlineKeyboardButton(t("settings", lang), callback_data="menu_settings"),
             InlineKeyboardButton(t("donate", lang), callback_data="menu_donate"),
+        ], [
             InlineKeyboardButton(t("our_channel", lang), url=t("channel_url", lang))
         ],
     ]
@@ -992,6 +1154,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await page_handler(update, context)
     elif data == "setting_tafsir_toggle":
         await setting_tafsir_toggle(update, context)
+    elif data == "menu_video_settings":
+        await video_settings_handler(update, context)
+    elif data.startswith("vtoggle_"):
+        await video_toggle_handler(update, context)
+    elif data.startswith("vid_"):
+        await video_generate_handler(update, context)
     elif data.startswith("voice_list_"):
         await voice_list_handler(update, context)
     elif data.startswith("voice_"):
