@@ -52,21 +52,25 @@ QBot/
 ├── bot.py          # Bot logic and Telegram handlers
 ├── nlu.py          # Query parsing (verse, range, page, search)
 ├── audio.py        # FFmpeg audio concatenation and metadata
-├── video.py        # MP4 video generation with timed subtitles
+├── video.py        # MP4 video generation (delegates rendering to srt2mp4)
 ├── search.py       # Arabic-normalizing full-text search
-├── tafsir.py       # Tafsir fetching with local cache
+├── tafsir.py       # Tafsir fetching with LRU + SQLite cache
 ├── data.py         # Quran data and text loading
-├── downloader.py   # Per-verse MP3 downloader
-├── database.py     # SQLite user preferences
+├── downloader.py   # Per-verse MP3 downloader with retry logic
+├── database.py     # SQLite models: User, TafsirCache; session helpers
 ├── lang.py         # Localization (ar/en)
 ├── config.py       # Paths, API URLs, reciter list
+├── utils.py        # Shared helpers: safe_filename, storage purge, rate limiter
 ├── locales/        # ar.json, en.json
 ├── data/
 │   ├── quran-data.json
 │   ├── quran-uthmani.txt
 │   ├── UthmanTN_v2-0.ttf
-│   └── audio/      # Cached per-verse MP3s
-└── output/         # Generated MP3s and MP4s
+│   └── audio/      # Cached per-verse MP3s (auto-purged on low disk)
+├── output/         # Generated MP3s and MP4s (auto-purged on low disk)
+└── ../srt2mp4/     # Video rendering engine (shared with standalone CLI tool)
+    ├── genMP4.py
+    └── backgrounds/ # Optional background images/videos for video generation
 ```
 
 ## Support

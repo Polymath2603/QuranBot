@@ -39,14 +39,6 @@ def get_sura_aya_count(quran_data: dict[str, Any], sura_num: int) -> int:
     return int(quran_data["Sura"][sura_num][1])
 
 
-def get_page(quran_data: dict[str, Any], sura: int, aya: int) -> int:
-    """Get page number for specified sura and aya."""
-    pages = quran_data.get("Page", [])
-    for page_num in range(1, len(pages)):
-        p_data = pages[page_num]
-        if not p_data:
-            continue
-        p_sura, p_aya = p_data[0], p_data[1]
-        if p_sura > sura or (p_sura == sura and p_aya > aya):
-            return page_num - 1
-    return 604
+def get_sura_start_index(quran_data: dict[str, Any], sura_num: int) -> int:
+    """Get the absolute verse index (0-based) where a sura starts in the verses list."""
+    return int(quran_data["Sura"][sura_num][0])

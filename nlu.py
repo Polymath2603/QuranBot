@@ -1,148 +1,211 @@
+"""
+nlu.py — Natural Language Understanding for QBot.
+
+Parses free-text user messages into structured intents:
+  - aya:    specific verse  { sura, aya }
+  - range:  verse range     { sura, from_aya, to_aya }
+  - surah:  full surah      { sura }
+  - page:   quran page      { page }
+  - search: text search     { query }
+"""
 import re
 from rapidfuzz import process, fuzz
 from search import normalize_arabic
 
-def get_all_sura_names(quran_data):
-    """Extract all Surah names (English and Arabic) with their numbers."""
+
+# ---------------------------------------------------------------------------
+# Surah name helpers
+# ---------------------------------------------------------------------------
+
+def _build_sura_names(quran_data: dict) -> list[dict]:
+    """Return a list of {name, sura, lang} entries for all surah names."""
     names = []
     for i, entry in enumerate(quran_data["Sura"][1:], 1):
         if len(entry) > 4:
-            names.append({"name": entry[4], "sura": i, "lang": "ar"})
+            names.append({"name": entry[4],                   "sura": i, "lang": "ar"})
             names.append({"name": normalize_arabic(entry[4]), "sura": i, "lang": "ar_norm"})
         if len(entry) > 5:
             names.append({"name": entry[5], "sura": i, "lang": "en"})
     return names
 
-def extract_sura_aya(text, sura_names):
+
+def _match_sura_name(text: str, sura_names: list[dict]) -> int | None:
     """
-    Helper to extract Surah and Ayah from a text chunk.
-    Returns: { "sura": int, "aya": int|None } or None
+    Fuzzy-match *text* against known surah names.
+    Returns the sura number on a confident match (score > 80), else None.
+    """
+    if not text.strip():
+        return None
+    choices     = [x["name"] for x in sura_names]
+    best        = process.extractOne(text, choices, scorer=fuzz.WRatio)
+    if best and best[1] > 80:
+        matched = next((x for x in sura_names if x["name"] == best[0]), None)
+        return matched["sura"] if matched else None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Chunk parser: extract sura+aya from a text fragment
+# ---------------------------------------------------------------------------
+
+def _parse_chunk(text: str, sura_names: list[dict]) -> dict | None:
+    """
+    Parse a text fragment into {sura, aya?}.
+    Handles:
+      - Pure numbers:     "2 255"  → sura=2, aya=255
+      - Name + number:    "Baqarah 255" → sura=2, aya=255
+      - Name only:        "Baqarah"  → sura=2, aya=None
+    Returns None if nothing useful found.
     """
     if not text:
         return None
-        
-    # Remove keywords
-    clean = re.sub(r"(FROM|SURAH|AYAH|VERSE|SURA|AYA)", "", text, flags=re.IGNORECASE).strip()
-    
-    # Extract numbers
-    numbers = re.findall(r"\d+", clean)
-    
-    # Text without numbers to find name
-    text_no_nums = re.sub(r"\d+", "", clean).strip()
-    
-    # Case 1: Just numbers "2 255" or "2"
-    if not text_no_nums and numbers:
+
+    clean    = re.sub(r"(FROM|SURAH|AYAH|VERSE|SURA|AYA)", "", text, flags=re.IGNORECASE).strip()
+    numbers  = re.findall(r"\d+", clean)
+    text_part = re.sub(r"\d+", "", clean).strip()
+
+    # Pure numbers
+    if not text_part and numbers:
         sura = int(numbers[0])
-        if sura > 114 or sura < 1:
-            return None # Invalid sura number usually
+        if not 1 <= sura <= 114:
+            return None
         aya = int(numbers[1]) if len(numbers) > 1 else None
         return {"sura": sura, "aya": aya}
 
-    # Case 2: Name + Numbers "Baqarah 255"
-    choices = [x["name"] for x in sura_names]
-    best_match = process.extractOne(text_no_nums, choices, scorer=fuzz.WRatio)
-    
-    if best_match and best_match[1] > 80:
-        matched_name = best_match[0]
-        sura_info = next((x for x in sura_names if x["name"] == matched_name), None)
-        if sura_info:
-            sura = sura_info["sura"]
-            aya = int(numbers[0]) if len(numbers) > 0 else None
-            return {"sura": sura, "aya": aya}
-            
+    # Name (possibly + number)
+    sura = _match_sura_name(text_part, sura_names)
+    if sura:
+        aya = int(numbers[0]) if numbers else None
+        return {"sura": sura, "aya": aya}
+
     return None
 
-def parse_message(text, quran_data):
-    original_text = text.strip()
-    text = normalize_arabic(original_text)
-    
-    # Keyword Normalization
-    # Note: normalize_arabic changes ى to ي, so الى becomes الي
-    text = re.sub(r"(from|من)\s+", "FROM ", text, flags=re.IGNORECASE)
-    text = re.sub(r"(to|الي|إلي|حتي|الى|إلى|حتى)\s+", "TO ", text, flags=re.IGNORECASE)
-    # text = re.sub(r"(surah|sura|سورة|سوره)\s+", "SURAH ", text, flags=re.IGNORECASE) # Handled in helper
-    
-    # Page detection
-    page_match = re.search(r"(page|صفحة)\s+(\d+)", text, flags=re.IGNORECASE)
-    if page_match:
-        page_num = int(page_match.group(2))
+
+# ---------------------------------------------------------------------------
+# Intent detectors
+# ---------------------------------------------------------------------------
+
+def _detect_page(text: str) -> dict | None:
+    """Detect 'page N' intent."""
+    m = re.search(r"(page|صفحة)\s+(\d+)", text, flags=re.IGNORECASE)
+    if m:
+        page_num = int(m.group(2))
         if 1 <= page_num <= 604:
             return {"type": "page", "page": page_num}
-            
-    # Support "Sura 1:3" or "1:3"
-    match = re.search(r"(\d+):(\d+)(?:-(\d+))?", original_text)
-    if match:
-        s1 = int(match.group(1))
-        a1 = int(match.group(2))
-        a2 = int(match.group(3)) if match.group(3) else None
-        
-        # If we have a sura name before it, use that
-        sura_names = get_all_sura_names(quran_data)
-        prefix = original_text[:match.start()].strip()
-        if prefix:
-            info = extract_sura_aya(prefix, sura_names)
-            if info:
-                # If prefix is "Baqarah 2:3", info["sura"]=2, a1=3. Wait.
-                # Usually it's "Baqarah 2:3" meaning Aya 2 to 3? Or Sura 2 Aya 3?
-                # If prefix has a number, extract_sura_aya uses it as Sura.
-                # Let's be simpler: if prefix matches a name, use that name's sura and treat s1 as aya.
-                choices = [x["name"] for x in sura_names]
-                best_match = process.extractOne(prefix, choices, scorer=fuzz.WRatio)
-                if best_match and best_match[1] > 80:
-                    matched_info = next(x for x in sura_names if x["name"] == best_match[0])
-                    if a2: return {"type": "range", "sura": matched_info["sura"], "from_aya": a1, "to_aya": a2}
-                    # "Baqarah 2:3" -> Sura 2 (Baqarah), Aya 2 to 3.
-                    return {"type": "range", "sura": matched_info["sura"], "from_aya": s1, "to_aya": a1}
+    return None
 
-        if a2: return {"type": "range", "sura": s1, "from_aya": a1, "to_aya": a2}
-        return {"type": "aya", "sura": s1, "aya": a1}
 
-    sura_names = get_all_sura_names(quran_data)
+def _detect_colon_notation(original: str, sura_names: list[dict]) -> dict | None:
+    """
+    Detect 'S:A' or 'S:A-B' notation, with optional surah name prefix.
+    e.g. '2:255', 'Baqarah 2:255', '2:1-5'
+    """
+    m = re.search(r"(\d+):(\d+)(?:-(\d+))?", original)
+    if not m:
+        return None
 
-    # Check for "TO" split
-    if "TO " in text:
-        parts = text.split("TO ")
-        part1 = parts[0].strip()
-        part2 = parts[1].strip()
-        
-        info1 = extract_sura_aya(part1, sura_names)
-        
-        if info1:
-            # If part2 is just a number, it's an Ayah in the same Sura
-            if part2.isdigit():
-                return {
-                    "type": "range",
-                    "sura": info1["sura"],
-                    "from_aya": info1.get("aya", 1),
-                    "to_aya": int(part2)
-                }
-            
-            info2 = extract_sura_aya(part2, sura_names)
-            if info2 and info2.get("sura"):
-                # Always treat as same sura or first sura if they differ (remove cross-surah)
-                return {
-                    "type": "range",
-                    "sura": info1["sura"],
-                    "from_aya": info1.get("aya", 1),
-                    "to_aya": info2.get("aya", 1) or 1
-                }
-            elif not info2:
-                 # Check if Part 2 contains a number at all
-                 nums = re.findall(r"\d+", part2)
-                 if nums:
-                     return {
-                         "type": "range",
-                         "sura": info1["sura"],
-                         "from_aya": info1.get("aya", 1),
-                         "to_aya": int(nums[0])
-                     }
+    s1, a1 = int(m.group(1)), int(m.group(2))
+    a2     = int(m.group(3)) if m.group(3) else None
+    prefix = original[:m.start()].strip()
 
-    # If no TO logic worked, try single entity
-    info = extract_sura_aya(text, sura_names)
-    if info:
-        if info.get("aya"):
-             return {"type": "aya", "sura": info["sura"], "aya": info["aya"]}
-        else:
-             return {"type": "surah", "sura": info["sura"]}
+    if prefix:
+        # Try to resolve prefix as a surah name
+        sura = _match_sura_name(normalize_arabic(prefix), sura_names)
+        if sura:
+            # "Baqarah 2:5" → sura=Baqarah, range s1→a1
+            if a2:
+                return {"type": "range", "sura": sura, "from_aya": s1, "to_aya": a2}
+            return {"type": "range", "sura": sura, "from_aya": s1, "to_aya": a1}
 
-    return {"type": "search", "query": original_text}
+    if a2:
+        return {"type": "range", "sura": s1, "from_aya": a1, "to_aya": a2}
+    return {"type": "aya", "sura": s1, "aya": a1}
+
+
+def _detect_range(normalized: str, sura_names: list[dict]) -> dict | None:
+    """Detect 'X to Y' / 'X TO Y' range patterns."""
+    if "TO " not in normalized:
+        return None
+
+    parts = normalized.split("TO ", 1)
+    part1, part2 = parts[0].strip(), parts[1].strip()
+    info1 = _parse_chunk(part1, sura_names)
+    if not info1:
+        return None
+
+    sura     = info1["sura"]
+    from_aya = info1.get("aya") or 1
+
+    # part2 is a plain number
+    if part2.isdigit():
+        return {"type": "range", "sura": sura, "from_aya": from_aya, "to_aya": int(part2)}
+
+    info2 = _parse_chunk(part2, sura_names)
+    if info2 and info2.get("aya"):
+        return {"type": "range", "sura": sura, "from_aya": from_aya, "to_aya": info2["aya"]}
+
+    # Fall back: extract first number from part2
+    nums = re.findall(r"\d+", part2)
+    if nums:
+        return {"type": "range", "sura": sura, "from_aya": from_aya, "to_aya": int(nums[0])}
+
+    return None
+
+
+def _detect_single(normalized: str, sura_names: list[dict]) -> dict | None:
+    """Detect a single aya or full surah reference."""
+    info = _parse_chunk(normalized, sura_names)
+    if not info:
+        return None
+    if info.get("aya"):
+        return {"type": "aya", "sura": info["sura"], "aya": info["aya"]}
+    return {"type": "surah", "sura": info["sura"]}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def parse_message(text: str, quran_data: dict) -> dict:
+    """
+    Parse a user message into a structured intent dict.
+
+    Returns one of:
+      {"type": "page",   "page": int}
+      {"type": "aya",    "sura": int, "aya": int}
+      {"type": "range",  "sura": int, "from_aya": int, "to_aya": int}
+      {"type": "surah",  "sura": int}
+      {"type": "search", "query": str}
+    """
+    original   = text.strip()
+    normalized = normalize_arabic(original)
+
+    # Keyword normalization (operate on normalized copy)
+    keywords = normalize_arabic(normalized)
+    keywords = re.sub(r"(from|من)\s+",                         "FROM ",  keywords, flags=re.IGNORECASE)
+    keywords = re.sub(r"(to|الي|إلي|حتي|الى|إلى|حتى)\s+",    "TO ",    keywords, flags=re.IGNORECASE)
+
+    sura_names = _build_sura_names(quran_data)
+
+    # 1. Page
+    result = _detect_page(keywords)
+    if result:
+        return result
+
+    # 2. Colon notation (use original to preserve numbers accurately)
+    result = _detect_colon_notation(original, sura_names)
+    if result:
+        return result
+
+    # 3. Range (FROM … TO …)
+    result = _detect_range(keywords, sura_names)
+    if result:
+        return result
+
+    # 4. Single aya / surah
+    result = _detect_single(keywords, sura_names)
+    if result:
+        return result
+
+    # 5. Fallback: text search
+    return {"type": "search", "query": original}
