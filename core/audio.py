@@ -2,10 +2,12 @@ import logging
 from pathlib import Path
 from config import DATA_DIR, OUTPUT_DIR
 import ffmpeg
-from downloader import download_audio
+from .downloader import download_audio
 
 logger = logging.getLogger(__name__)
 
+
+# get_verse_durations → subtitles.py
 
 def get_audio_file(voice: str, sura: int, aya: int) -> Path | None:
     audio_dir = DATA_DIR / "audio"
@@ -31,7 +33,7 @@ def gen_mp3(
         artist = voice
 
     range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
-    filename = f"{range_id}.mp3"
+    filename = f"{voice}_{range_id}.mp3"
     voice_output_dir = output_dir / voice
     voice_output_dir.mkdir(parents=True, exist_ok=True)
     output_path = voice_output_dir / filename
