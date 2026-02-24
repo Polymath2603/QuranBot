@@ -4,35 +4,79 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
+BASE_DIR   = Path(__file__).parent
+DATA_DIR   = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "output"
+LOCALE_DIR = BASE_DIR / "locales"
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+BOT_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHANNEL_URL = ""
+AUDIO_API   = "https://everyayah.com/data"
+QURAN_API   = "https://api.alquran.cloud/v1"
+# ---------------------------------------------------------------------------
+# Timeouts
+# ---------------------------------------------------------------------------
+HTTP_CONNECT_TIMEOUT = 20
+HTTP_READ_TIMEOUT    = 90
+DOWNLOAD_TIMEOUT     = 30
 
-AUDIO_API = "https://everyayah.com/data"
-QURAN_API = "https://api.alquran.cloud/v1"
+# ---------------------------------------------------------------------------
+# Video
+# ---------------------------------------------------------------------------
+VIDEO_FPS           = 23
+VIDEO_FADE_DURATION = 1        # seconds between verse transitions
+VIDEO_SYNC_OFFSET   = -0.2     # fixed seconds to shift text track forward relative to audio
+VIDEO_FONT_SIZE     = 30       # starting font size, auto-shrinks to fit
+VIDEO_MIN_FONT_SIZE = 23
+VIDEO_PADDING       = 40       # px padding inside frame
+VIDEO_FALLBACK_DUR  = 5.0      # seconds/verse fallback when MP3 not cached
+FONT_PATH           = str(DATA_DIR / "KFGQPC Uthmanic Script HAFS.otf.ttf")
+BG_DIR              = DATA_DIR / "backgrounds"
 
+# Portrait 9:16 and landscape 16:9 — kept small for fast encode
+VIDEO_SIZES = {
+    "portrait":  (630, 1120),
+    "landscape": (1120, 630),
+}
+VIDEO_DEFAULT_RATIO = "landscape"
+
+# ---------------------------------------------------------------------------
+# Storage / rate limiting
+# ---------------------------------------------------------------------------
+PURGE_THRESHOLD_MB  = 200
+WARN_THRESHOLD_MB   = 500
+RATE_WINDOW_SECONDS = 3600
+RATE_MAX_REQUESTS   = 10
+
+# ---------------------------------------------------------------------------
+# Admin & request limits
+# ---------------------------------------------------------------------------
+# Telegram user IDs allowed to use /admin — add yours here
+ADMIN_IDS: list = [8425074393]
+# Max ayas allowed per single audio/video request
+MAX_AYAS_PER_REQUEST = 50
+
+# ---------------------------------------------------------------------------
+# Voices
+# ---------------------------------------------------------------------------
 DEFAULT_VOICE = "Alafasy_64kbps"
-
-# Reciter voices with localized names
 VOICES = {
-    "Alafasy_64kbps": {"ar": "مشاري العفاسي", "en": "Mishary Alafasy"},
-    "Husary_64kbps": {"ar": "محمود الحصري", "en": "Mahmoud Al-Husary"},
-    "Abdul_Basit_Murattal_192kbps": {"ar": "عبد الباسط عبد الصمد", "en": "Abdul Basit"},
-    "Abdurrahmaan_As-Sudais_192kbps": {"ar": "عبد الرحمن السديس", "en": "Abdurrahman As-Sudais"},
-    "Abu_Bakr_Ash-Shaatree_64kbps": {"ar": "أبو بكر الشاطري", "en": "Abu Bakr Ash-Shatri"},
-    "Ahmed_ibn_Ali_al-Ajamy_128kbps": {"ar": "أحمد العجمي", "en": "Ahmed Al-Ajamy"},
-    "Ghamadi_40kbps": {"ar": "سعد الغامدي", "en": "Saad Al-Ghamadi"},
-    "Hani_Rifai_192kbps": {"ar": "هاني الرفاعي", "en": "Hani Ar-Rifai"},
-    "Maher_AlMuaiqly_64kbps": {"ar": "ماهر المعيقلي", "en": "Maher Al-Muaiqly"},
-    "MahmoudKhalil_Al-Husary_64kbps": {"ar": "محمود خليل الحصري", "en": "Mahmoud Khalil Al-Husary"},
-    "Minshawy_Murattal_128kbps": {"ar": "محمد صديق المنشاوي", "en": "Mohamed Siddiq Al-Minshawi"},
-    "Nasser_Alqatami_128kbps": {"ar": "ناصر القطامي", "en": "Nasser Al-Qatami"},
-    "Parhizgar_48kbps": {"ar": "عبدالباسط هاشمي", "en": "Shahriar Parhizgar"},
-    "Yasser_Ad-Dussary_128kbps": {"ar": "ياسر الدوسري", "en": "Yasser Ad-Dussary"},
-    "Ayman_Sowaid_64kbps": {"ar": "أيمن سويد", "en": "Ayman Sowaid"},
-    "Aziz_Alili_128kbps": {"ar": "عزيز عليلي", "en": "Aziz Alili"},
-    "Sahl_Yassin_128kbps": {"ar": "سهل ياسين", "en": "Sahl Yassin"},
-    "Warsh_Ibrahim_Walk_192kbps": {"ar": "إبراهيم الأخضر (ورش)", "en": "Ibrahim Walk (Warsh)"},
+    "Alafasy_64kbps":                 {"ar": "مشاري العفاسي",         "en": "Mishary Alafasy"},
+    "Husary_64kbps":                  {"ar": "محمود الحصري",          "en": "Mahmoud Al-Husary"},
+    "Abdul_Basit_Murattal_192kbps":   {"ar": "عبد الباسط عبد الصمد", "en": "Abdul Basit"},
+    "Abdurrahmaan_As-Sudais_192kbps": {"ar": "عبد الرحمن السديس",    "en": "Abdurrahman As-Sudais"},
+    "Abu_Bakr_Ash-Shaatree_64kbps":   {"ar": "أبو بكر الشاطري",      "en": "Abu Bakr Ash-Shatri"},
+    "Ahmed_ibn_Ali_al-Ajamy_128kbps": {"ar": "أحمد العجمي",          "en": "Ahmed Al-Ajamy"},
+    "Ghamadi_40kbps":                 {"ar": "سعد الغامدي",          "en": "Saad Al-Ghamadi"},
+    "Hani_Rifai_192kbps":             {"ar": "هاني الرفاعي",         "en": "Hani Ar-Rifai"},
+    "Maher_AlMuaiqly_64kbps":         {"ar": "ماهر المعيقلي",        "en": "Maher Al-Muaiqly"},
+    "MahmoudKhalil_Al-Husary_64kbps": {"ar": "محمود خليل الحصري",   "en": "Mahmoud Khalil Al-Husary"},
+    "Minshawy_Murattal_128kbps":      {"ar": "محمد صديق المنشاوي",  "en": "Mohamed Siddiq Al-Minshawi"},
+    "Nasser_Alqatami_128kbps":        {"ar": "ناصر القطامي",         "en": "Nasser Al-Qatami"},
+    "Parhizgar_48kbps":               {"ar": "عبدالباسط هاشمي",      "en": "Shahriar Parhizgar"},
+    "Yasser_Ad-Dussary_128kbps":      {"ar": "ياسر الدوسري",         "en": "Yasser Ad-Dussary"},
+    "Ayman_Sowaid_64kbps":            {"ar": "أيمن سويد",            "en": "Ayman Sowaid"},
+    "Aziz_Alili_128kbps":             {"ar": "عزيز عليلي",           "en": "Aziz Alili"},
+    "Sahl_Yassin_128kbps":            {"ar": "سهل ياسين",            "en": "Sahl Yassin"},
+    "Warsh_Ibrahim_Walk_192kbps":     {"ar": "إبراهيم الأخضر (ورش)", "en": "Ibrahim Walk (Warsh)"},
 }

@@ -178,6 +178,11 @@ def render_verse_png(
 
 # ── Timing ────────────────────────────────────────────────────────────────────
 
+def _to_arabic_numerals(n: int) -> str:
+    """Convert integer to Arabic-Indic digits: 123 → ١٢٣"""
+    ar = "٠١٢٣٤٥٦٧٨٩"
+    return "".join(ar[int(d)] for d in str(n))
+
 def _build_entries(verses_list, start_aya, verse_durations):
     entries, t = [], 0.0
     for i, verse in enumerate(verses_list):
@@ -186,7 +191,8 @@ def _build_entries(verses_list, start_aya, verse_durations):
             if verse_durations and i < len(verse_durations) and verse_durations[i] > 0
             else VIDEO_FALLBACK_DUR
         )
-        entries.append({"text": f"{verse} ({start_aya + i})", "start": t, "end": t + dur})
+        aya_num = _to_arabic_numerals(start_aya + i)
+        entries.append({"text": f"{verse} {aya_num}", "start": t, "end": t + dur})
         t += dur
     return entries
 

@@ -11,12 +11,15 @@ from .utils import safe_filename
 logger = logging.getLogger(__name__)
 
 def build_verse_keyboard(sura, start, end, lang, fmt) -> InlineKeyboardMarkup:
-    InlineKeyboardMarkup([
-        InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}"),
-        InlineKeyboardButton(t("text", lang),   callback_data=f"text_{sura}_{start}_{end}")
-    ],[
-        InlineKeyboardButton(t("audio",  lang), callback_data=f"play_{sura}_{start}_{end}"),
-        InlineKeyboardButton(t("video", lang),  callback_data=f"vid_{sura}_{start}_{end}")
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t("tafsir", lang), callback_data=f"tafsir_{sura}_{start}_{end}"),
+            InlineKeyboardButton(t("text",   lang), callback_data=f"text_{sura}_{start}_{end}"),
+        ],
+        [
+            InlineKeyboardButton(t("audio", lang), callback_data=f"play_{sura}_{start}_{end}"),
+            InlineKeyboardButton(t("video", lang), callback_data=f"vid_{sura}_{start}_{end}"),
+        ],
     ])
 
 def format_verse_file(fmt, verse_pairs, durations=None, title="", artist="") -> str:
@@ -25,10 +28,10 @@ def format_verse_file(fmt, verse_pairs, durations=None, title="", artist="") -> 
     if fmt == "lrc": return build_lrc(verse_pairs, durations, title=title, artist=artist)
     return ""
 
-async def send_file(message, content: str, fmt: str, base_name: str) -> None:
+async def send_file(message, content: str, fmt: str, base_name: str, lang: str = "ar") -> None:
     filename = f"{base_name}.{fmt}"
     bio = BytesIO(content.encode("utf-8")); bio.name = filename
-    await message.reply_document(document=bio, caption=t("file_caption", "ar", filename=filename))
+    await message.reply_document(document=bio, caption=t("file_caption", lang, filename=filename))
 
 async def send_paged_message(message, text: str, reply_markup=None) -> None:
     if len(text) <= 4000:
@@ -45,7 +48,6 @@ async def send_paged_message(message, text: str, reply_markup=None) -> None:
 
 async def send_text_single(query, sura, aya, user, lang, verses, quran_data, durations=None):
     fmt = user.get_preference("text_format", "txt")
-    if fmt == "off": return
     sura_name  = get_sura_name(quran_data, sura, lang)
     idx        = get_sura_start_index(quran_data, sura)
     verse_text = verses[idx + aya - 1]
@@ -54,14 +56,13 @@ async def send_text_single(query, sura, aya, user, lang, verses, quran_data, dur
     back_kb    = InlineKeyboardMarkup([[InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{aya}_{aya}")]])
     if fmt in ("srt", "lrc", "txt"):
         content = format_verse_file(fmt, [(aya, verse_text)], durations=durations, title=title)
-        await send_file(query.message, content, fmt, safe_filename(title))
+        await send_file(query.message, content, fmt, safe_filename(title), lang)
     if fmt not in ("srt", "lrc"):
         if len(response) <= 4000: await query.edit_message_text(response, reply_markup=back_kb)
         else: await send_paged_message(query.message, response, reply_markup=back_kb)
 
 async def send_text_range(query, sura, start, end, current_start, user, lang, verses, quran_data, durations=None):
     fmt = user.get_preference("text_format", "txt")
-    if fmt == "off": return
     sura_name     = get_sura_name(quran_data, sura, lang)
     idx           = get_sura_start_index(quran_data, sura)
     current_end   = min(current_start + 9, end)
@@ -77,7 +78,7 @@ async def send_text_range(query, sura, start, end, current_start, user, lang, ve
     kb = InlineKeyboardMarkup(([nav] if nav else []) + [[InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{start}_{end}")]])
     if fmt in ("srt", "lrc", "txt"):
         content = format_verse_file(fmt, verse_pairs, durations=durations, title=title)
-        await send_file(query.message, content, fmt, safe_filename(title))
+        await send_file(query.message, content, fmt, safe_filename(title), lang)
         if fmt != "txt": return
     verses_text = " ".join(f"{text} ({i})" for i, text in current_pairs)
     response = f"📖 {display_title}\n\n﴿ {verses_text} ﴾"

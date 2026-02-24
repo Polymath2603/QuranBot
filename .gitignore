@@ -62,6 +62,7 @@ data/images/
 data/tafasir/
 data/tarajem/
 data/users/
+data/backgrounds
 data/*.db
 data/*.sqlite*
 

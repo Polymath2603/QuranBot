@@ -70,3 +70,47 @@ class LRUCache:
         if len(self._store) > self._max_size: self._store.popitem(last=False)
     def __contains__(self, key: str) -> bool:
         return key in self._store
+
+
+# ---------------------------------------------------------------------------
+# Telegram file_id permanent cache  (OUTPUT_DIR/file_ids.json)
+# Keyed by stable string: "audio:{voice}:{sura}:{start}:{end}"
+#                         "video:{voice}:{sura}:{start}:{end}:{bits}"
+# ---------------------------------------------------------------------------
+import json as _json
+from config import OUTPUT_DIR as _OUTPUT_DIR
+
+_FILE_ID_PATH = _OUTPUT_DIR / "file_ids.json"
+_file_ids: dict = {}
+
+def _load_file_ids() -> None:
+    global _file_ids
+    try:
+        _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        if _FILE_ID_PATH.exists():
+            _file_ids = _json.loads(_FILE_ID_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning("Could not load file_ids.json: %s", e)
+        _file_ids = {}
+
+def _save_file_ids() -> None:
+    try:
+        _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        _FILE_ID_PATH.write_text(
+            _json.dumps(_file_ids, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning("Could not save file_ids.json: %s", e)
+
+def get_file_id(key: str) -> str | None:
+    return _file_ids.get(key)
+
+def set_file_id(key: str, file_id: str) -> None:
+    _file_ids[key] = file_id
+    _save_file_ids()
+
+def file_id_count() -> int:
+    return len(_file_ids)
+
+_load_file_ids()

@@ -1,99 +1,119 @@
-# QBot: Quran Telegram Bot
+# 🌙 QBot — بوت القرآن الكريم
 
-A Telegram bot for accessing the Quran — browse by verse, range, or page; listen to recitations; watch verse videos; and read Tafsir.
+A Telegram bot for listening to, reading, and studying the Holy Quran.  
+اللهم اجعله خالصاً لوجهك الكريم 🤲
 
-## Features
+---
 
-- **Natural Language Search**: Accepts queries in Arabic and English (e.g., `Baqarah 255`, `صفحة 10`, `1:1-5`).
-- **Audio Playback**: Stream or download recitations from multiple reciters with embedded metadata.
-- **Video Generation** _(Beta)_: Create MP4 videos of verses with timed subtitles, configurable backgrounds and text styling.
-- **Tafsir**: Access verse interpretations fetched from AlQuran.cloud.
-- **Page Navigation**: Browse all 604 pages of the Quran with ◀️/▶️ buttons.
-- **Text Export**: Export verses as TXT, SRT, or LRC files.
-- **Localization**: Arabic (default) and English interfaces.
+## ✨ What Can It Do?
 
-## Quick Start
+| Feature | Description |
+|---|---|
+| 🎧 **Audio** | Listen to any verse or surah with your chosen reciter |
+| 🎬 **Video** | Receive a beautiful synced recitation video |
+| 📖 **Text** | Read verses inline, or export as TXT / SRT / LRC |
+| 📚 **Tafsir** | Read Al-Muyassar or Jalalayn explanations |
+| 🔍 **Search** | Find verses by text — tap any result to open it |
+| 📄 **Page view** | Browse all 604 pages of the Mushaf |
 
+---
+
+## 💬 How to Use
+
+Just **send a message** — the bot understands Arabic and English naturally:
+
+| What you type | What you get |
+|---|---|
+| `2:255` | Al-Baqarah verse 255 (Ayat Al-Kursi) |
+| `البقرة ٢٥٥` | Same, Arabic input |
+| `Baqarah 255` | Same, English input |
+| `1:1-7` | Al-Fatihah verses 1–7 |
+| `الكهف` | Full Surah Al-Kahf |
+| `Kahf` | Same in English |
+| `page 5` / `صفحة ٥` | Page 5 of the Mushaf |
+| Any Arabic phrase | Full-text search across the Quran |
+
+After the bot responds, tap the buttons:
+
+- **📖 تفسير** — Tafsir (explanation)
+- **📖 نص** — Text / file export
+- **🎧 صوت** — Audio recitation
+- **🎬 فيديو** — Synced verse video
+
+---
+
+## ⚙️ Settings
+
+Tap **⚙️ الإعدادات** from the welcome screen:
+
+| Setting | What it does |
+|---|---|
+| 🌐 Language | Switch between Arabic and English interface |
+| 📄 Format | Choose how text is delivered: message / TXT / SRT / LRC |
+| 📖 Tafsir | Toggle between Al-Muyassar and Jalalayn |
+| 🎬 Video Settings | Text colour, border, landscape / portrait |
+| 🎙️ Reciter | Choose from 18 reciters |
+
+### 🎬 Video Settings
+
+| Setting | Options | Default |
+|---|---|---|
+| Text colour | White / Black | White |
+| Border/shadow | On / Off | On |
+| Ratio | Landscape 16:9 / Portrait 9:16 | Landscape |
+
+> The background setting is temporarily hidden while being reworked — default is black.
+
+---
+
+## 🚀 Setup (Self-Hosting)
+
+### Requirements
+- Python 3.11+
+- FFmpeg in PATH (`ffmpeg` must work in your terminal)
+- A bot token from [@BotFather](https://t.me/BotFather)
+
+### Install & Run
 ```bash
 git clone https://github.com/yourusername/qbot
 cd qbot
 pip install -r requirements.txt
-cp .env.example .env   # Add your TELEGRAM_BOT_TOKEN
+cp .env.example .env        # then set TELEGRAM_BOT_TOKEN inside
 python bot.py
 ```
 
-## Usage Examples
+### Optional: Add Video Backgrounds
+Place `.mp4`, `.jpg`, or `.png` files in `data/backgrounds/`.  
+These are used in the Random background mode (coming soon to settings).
 
-- **Single verse**: `2:255` or `Baqarah 255`
-- **Range**: `1:1-7` or `Al-Fatihah 1 to 7`
-- **Full Surah**: `Kahf` or `سورة الكهف`
-- **By page**: `page 1` or `صفحة 200`
-- **Search**: Any text is auto-detected as search
-
-## Data Sources
-
-| File                | Source                                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------- |
-| `quran-data.json`   | [tanzil.net](https://tanzil.net) — downloaded as `quran-data.js`, reformatted to JSON without changes |
-| `quran-uthmani.txt` | [tanzil.net](https://tanzil.net) — used as-is                                                         |
-| `UthmanTN_v2-0.ttf` | Uthmani font for video text rendering                                                                 |
-
-## APIs
-
-| API                                                  | Purpose                                    |
-| ---------------------------------------------------- | ------------------------------------------ |
-| [everyayah.com](https://everyayah.com)               | Audio recitations (per-verse MP3 files)    |
-| [api.alquran.cloud/v1](https://api.alquran.cloud/v1) | Tafsir (Al-Muyassar, Jalalayn, and others) |
-
-## Project Structure
-
-```
-QBot/
-├── bot.py          # Bot logic and Telegram handlers
-├── nlu.py          # Query parsing (verse, range, page, search)
-├── audio.py        # FFmpeg audio concatenation and metadata
-├── video.py        # MP4 video generation (delegates rendering to srt2mp4)
-├── search.py       # Arabic-normalizing full-text search
-├── tafsir.py       # Tafsir fetching with LRU + SQLite cache
-├── data.py         # Quran data and text loading
-├── downloader.py   # Per-verse MP3 downloader with retry logic
-├── database.py     # SQLite models: User, TafsirCache; session helpers
-├── lang.py         # Localization (ar/en)
-├── config.py       # Paths, API URLs, reciter list
-├── utils.py        # Shared helpers: safe_filename, storage purge, rate limiter
-├── locales/        # ar.json, en.json
-├── data/
-│   ├── quran-data.json
-│   ├── quran-uthmani.txt
-│   ├── UthmanTN_v2-0.ttf
-│   └── audio/      # Cached per-verse MP3s (auto-purged on low disk)
-├── output/         # Generated MP3s and MP4s (auto-purged on low disk)
-└── ../srt2mp4/     # Video rendering engine (shared with standalone CLI tool)
-    ├── genMP4.py
-    └── backgrounds/ # Optional background images/videos for video generation
-```
-
-## Support
-
-### 🌟 Telegram Stars
-
-Donate directly via the `/start` menu inside the bot.
-
-### 💰 Crypto
-
-- **BTC**: `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp`
-- **ETH / BNB**: `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf`
-- **Solana**: `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn`
-
-### 📈 Exchanges
-
-- **Binance**: [app.binance.com/uni-qr/Uzof5Lrq](https://app.binance.com/uni-qr/Uzof5Lrq) · ID `1011264323`
-- **Bybit**: [i.bybit.com/W2abUWF](https://i.bybit.com/W2abUWF) · ID `467077834`
-
-### 💳 PayPal
-
-[paypal.com/ncp/payment/W78F6W4TXZ4CS](https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS)
+### Admin Panel
+Add your Telegram user ID to `ADMIN_IDS` in `config.py`, then use `/admin` to see:
+- Total users, queue depth, free disk space, cached files, top reciters
 
 ---
 
-Jazakallahu Khairan 🤲
+## 💝 Support
+
+Running this bot takes resources. If you find it useful:
+
+- **Inside the bot** → `/start` → 💝 Donate → pay with Telegram Stars
+- **PayPal**: [paypal.com/ncp/payment/W78F6W4TXZ4CS](https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS)
+- **Binance** ID: `1011264323`  ·  **Bybit** ID: `467077834`
+- **BTC**: `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp`
+- **ETH/BNB**: `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf`
+- **SOL**: `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn`
+
+جزاكم الله خيراً 🤲
+
+---
+
+## 🙏 Attribution
+
+- Quran text & metadata — [tanzil.net](https://tanzil.net)
+- Audio recitations — [everyayah.com](https://everyayah.com)
+- Tafsir API — [alquran.cloud](https://alquran.cloud)
+- Uthmanic font — KFGQPC (King Fahd Quran Printing Complex)
+
+---
+
+📋 [Changelog](CHANGELOG.md) · ✅ [Todo](TODO.md) · 🔧 [Technical Docs](TECHNICAL.md)

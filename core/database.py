@@ -52,6 +52,8 @@ Session = sessionmaker(bind=engine)
 
 
 def init_db() -> None:
+    # Import queue model here to ensure its table is created
+    from core.queue import QueueItem  # noqa: F401
     Base.metadata.create_all(engine)
 
 
