@@ -5,8 +5,8 @@ def normalize_arabic(text):
     if not text:
         return ""
     
-    # 1. Normalize Alif variations
-    text = re.sub(r'[إأآٱ]', 'ا', text)
+    # 1. Normalize Alif variations (including superscript alif ٰ U+0670)
+    text = re.sub(r'[إأآٱاٰ]', 'ا', text)
     
     # 2. Normalize Alif Maksura (ى) to Ya (ي)
     text = re.sub(r'ى', 'ي', text)

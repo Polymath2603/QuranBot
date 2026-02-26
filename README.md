@@ -1,119 +1,116 @@
-# 🌙 QBot — بوت القرآن الكريم
+<div align="center">
 
-A Telegram bot for listening to, reading, and studying the Holy Quran.  
-اللهم اجعله خالصاً لوجهك الكريم 🤲
+# 🌙 بوت القرآن الكريم
+
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-21+-229ED9)](https://github.com/python-telegram-bot/python-telegram-bot)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](LICENSE)
+
+🇸🇦 العربية · [🌐 English](README.en.md)
+
+</div>
 
 ---
 
-## ✨ What Can It Do?
+بوت تيليجرام للقرآن الكريم. ابحث بالآية أو السورة أو الصفحة، استمع بصوت 18 قارئاً، اقرأ التفسير، وصدّر ملفات الترجمة — أو اطلب فيديو الآية مباشرة.
 
-| Feature | Description |
+---
+
+## المميزات
+
+- 🎬 **توليد فيديو** — فيديو لكل آية مع الصوت المتزامن، أفقي أو عمودي. الوحيد في تيليجرام.
+- 🎧 **18 قارئاً** — العفاسي، السديس، عبد الباسط، الحصري، وغيرهم.
+- 🔍 **بحث ذكي** — يبحث في النص الكامل مع تطبيع عربي شامل (ألفات، تشكيل، همزات).
+- 📚 **تفسيران** — الميسر والجلالين مع تصفح بالصفحات.
+- 📄 **تصدير** — TXT وSRT وLRC مع توقيتات دقيقة.
+- ⚡ **إرسال فوري** — الملفات المولَّدة مُخزَّنة، والطلبات المكررة تُرسَل فوراً.
+- 🌐 **عربي وإنجليزي** — واجهة بالكامل بالغتين.
+
+---
+
+## طريقة الاستخدام
+
+أرسل اسم سورة أو رقم آية أو صفحة أو نصاً عربياً للبحث:
+
+| المدخل | مثال |
 |---|---|
-| 🎧 **Audio** | Listen to any verse or surah with your chosen reciter |
-| 🎬 **Video** | Receive a beautiful synced recitation video |
-| 📖 **Text** | Read verses inline, or export as TXT / SRT / LRC |
-| 📚 **Tafsir** | Read Al-Muyassar or Jalalayn explanations |
-| 🔍 **Search** | Find verses by text — tap any result to open it |
-| 📄 **Page view** | Browse all 604 pages of the Mushaf |
+| سورة + آية | `البقرة ٢٥٥` · `Baqarah 255` |
+| نطاق | `الفاتحة ١ إلى ٧` · `1:1-7` |
+| اسم سورة | `الكهف` · `Kahf` |
+| صفحة | `صفحة ٥` · `page 5` |
+| بحث | `وما توفيقي إلا بالله` |
 
----
+تظهر الآية مع أزرار التفاعل:
 
-## 💬 How to Use
-
-Just **send a message** — the bot understands Arabic and English naturally:
-
-| What you type | What you get |
+| الزر | |
 |---|---|
-| `2:255` | Al-Baqarah verse 255 (Ayat Al-Kursi) |
-| `البقرة ٢٥٥` | Same, Arabic input |
-| `Baqarah 255` | Same, English input |
-| `1:1-7` | Al-Fatihah verses 1–7 |
-| `الكهف` | Full Surah Al-Kahf |
-| `Kahf` | Same in English |
-| `page 5` / `صفحة ٥` | Page 5 of the Mushaf |
-| Any Arabic phrase | Full-text search across the Quran |
-
-After the bot responds, tap the buttons:
-
-- **📖 تفسير** — Tafsir (explanation)
-- **📖 نص** — Text / file export
-- **🎧 صوت** — Audio recitation
-- **🎬 فيديو** — Synced verse video
+| 📚 تفسير | التفسير |
+| 📄 نص | النص أو ملف TXT / SRT / LRC |
+| 🎧 صوت | الصوت |
+| 🎬 فيديو | الفيديو |
+| 📄 صفحة N | الصفحة في المصحف |
 
 ---
 
-## ⚙️ Settings
+## الإعدادات
 
-Tap **⚙️ الإعدادات** from the welcome screen:
-
-| Setting | What it does |
+| | الخيارات |
 |---|---|
-| 🌐 Language | Switch between Arabic and English interface |
-| 📄 Format | Choose how text is delivered: message / TXT / SRT / LRC |
-| 📖 Tafsir | Toggle between Al-Muyassar and Jalalayn |
-| 🎬 Video Settings | Text colour, border, landscape / portrait |
-| 🎙️ Reciter | Choose from 18 reciters |
-
-### 🎬 Video Settings
-
-| Setting | Options | Default |
-|---|---|---|
-| Text colour | White / Black | White |
-| Border/shadow | On / Off | On |
-| Ratio | Landscape 16:9 / Portrait 9:16 | Landscape |
-
-> The background setting is temporarily hidden while being reworked — default is black.
+| اللغة | العربية / English |
+| صيغة النص | رسالة / TXT / SRT / LRC |
+| التفسير | تفسير الميسر / تفسير الجلالين |
+| نسبة الفيديو | أفقي 16:9 / عمودي 9:16 |
+| القارئ | 18 خياراً |
 
 ---
 
-## 🚀 Setup (Self-Hosting)
+## التشغيل الذاتي
 
-### Requirements
-- Python 3.11+
-- FFmpeg in PATH (`ffmpeg` must work in your terminal)
-- A bot token from [@BotFather](https://t.me/BotFather)
+**المتطلبات:** Python 3.10+ وFFmpeg
 
-### Install & Run
 ```bash
-git clone https://github.com/yourusername/qbot
-cd qbot
+git clone https://github.com/yourname/quranbot
+cd quranbot
 pip install -r requirements.txt
-cp .env.example .env        # then set TELEGRAM_BOT_TOKEN inside
+```
+
+أنشئ ملف `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+```
+
+```bash
 python bot.py
 ```
 
-### Optional: Add Video Backgrounds
-Place `.mp4`, `.jpg`, or `.png` files in `data/backgrounds/`.  
-These are used in the Random background mode (coming soon to settings).
+**الإعدادات الرئيسية في `config.py`:**
 
-### Admin Panel
-Add your Telegram user ID to `ADMIN_IDS` in `config.py`, then use `/admin` to see:
-- Total users, queue depth, free disk space, cached files, top reciters
-
----
-
-## 💝 Support
-
-Running this bot takes resources. If you find it useful:
-
-- **Inside the bot** → `/start` → 💝 Donate → pay with Telegram Stars
-- **PayPal**: [paypal.com/ncp/payment/W78F6W4TXZ4CS](https://www.paypal.com/ncp/payment/W78F6W4TXZ4CS)
-- **Binance** ID: `1011264323`  ·  **Bybit** ID: `467077834`
-- **BTC**: `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp`
-- **ETH/BNB**: `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf`
-- **SOL**: `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn`
-
-جزاكم الله خيراً 🤲
+```python
+ADMIN_IDS            = [123456789]
+MAX_AYAS_PER_REQUEST = 50          # حد النطاقات؛ السور الكاملة بلا حد
+VIDEO_DEFAULT_RATIO  = "landscape" # أو "portrait"
+DEFAULT_VOICE        = "Alafasy_64kbps"
+```
 
 ---
 
-## 🙏 Attribution
+## الدعم
 
-- Quran text & metadata — [tanzil.net](https://tanzil.net)
-- Audio recitations — [everyayah.com](https://everyayah.com)
-- Tafsir API — [alquran.cloud](https://alquran.cloud)
-- Uthmanic font — KFGQPC (King Fahd Quran Printing Complex)
+| | |
+|---|---|
+| 💳 PayPal | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
+| 🔶 Binance ID | `1011264323` |
+| 🟡 Bybit ID | `467077834` |
+| ₿ BTC | `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp` |
+| 🔷 ETH / BNB | `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf` |
+| 🟣 SOL | `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn` |
 
 ---
 
-📋 [Changelog](CHANGELOG.md) · ✅ [Todo](TODO.md) · 🔧 [Technical Docs](TECHNICAL.md)
+## مصادر
+
+نص القرآن وبيانات الصفحات: [Tanzil.net](https://tanzil.net)
+الملفات الصوتية: [EveryAyah.com](https://everyayah.com)
+التفسير: [AlQuran.cloud](https://alquran.cloud)
+الخط العثماني: [KFGQPC](https://fonts.qurancomplex.gov.sa) — مجمع الملك فهد لطباعة المصحف الشريف

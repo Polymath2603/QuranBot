@@ -1,4 +1,4 @@
-import logging
+import logging, subprocess
 from pathlib import Path
 from config import DATA_DIR, OUTPUT_DIR
 import ffmpeg
@@ -28,6 +28,7 @@ def gen_mp3(
     end_aya: int,
     title: str = "Quran",
     artist: str | None = None,
+    progress_cb=None,
 ) -> Path:
     if not artist:
         artist = voice
@@ -39,35 +40,43 @@ def gen_mp3(
     output_path = voice_output_dir / filename
 
     if output_path.exists():
+        if progress_cb: progress_cb(100)
         return output_path
 
     # Collect audio files
     files = []
     for sura in range(start_sura, end_sura + 1):
-        max_aya  = int(quran_data["Sura"][sura][1])
+        max_aya   = int(quran_data["Sura"][sura][1])
         aya_start = start_aya if sura == start_sura else 1
         aya_end   = end_aya   if sura == end_sura   else max_aya
-
         for aya in range(aya_start, aya_end + 1):
-            path = audio_dir / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
+            files.append((sura, aya))
 
-            if path.exists() and path.stat().st_size == 0:
-                logger.warning(f"Empty audio file, re-downloading: {path}")
+    total = len(files)
+    downloaded = []
+    for idx, (sura, aya) in enumerate(files):
+        path = audio_dir / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
+
+        if path.exists() and path.stat().st_size == 0:
+            logger.warning(f"Empty audio file, re-downloading: {path}")
+            path.unlink()
+
+        if not path.exists():
+            path = download_audio(voice, sura, aya)
+
+        if not path or not path.exists() or path.stat().st_size == 0:
+            if path and path.exists():
                 path.unlink()
+            raise FileNotFoundError(f"Failed to download valid audio: {sura}:{aya}")
 
-            if not path.exists():
-                path = download_audio(voice, sura, aya)
-
-            if not path or not path.exists() or path.stat().st_size == 0:
-                if path and path.exists():
-                    path.unlink()
-                raise FileNotFoundError(f"Failed to download valid audio: {sura}:{aya}")
-            files.append(path)
+        downloaded.append(path)
+        if progress_cb:
+            # Download phase covers 0-70%; leave 70-100% for concat+strip
+            progress_cb(int((idx + 1) / total * 70))
 
     output_dir.mkdir(parents=True, exist_ok=True)
     temp = voice_output_dir / f"temp_{filename}"
 
-    # Build metadata args for ffmpeg-python
     metadata_args = {
         "metadata:g:0": f"title={title}",
         "metadata:g:1": f"artist={artist}",
@@ -77,7 +86,7 @@ def gen_mp3(
     }
 
     try:
-        inputs = [ffmpeg.input(str(f)) for f in files]
+        inputs = [ffmpeg.input(str(f)) for f in downloaded]
         (
             ffmpeg.concat(*inputs, v=0, a=1)
             .output(str(temp), **metadata_args)
@@ -88,9 +97,8 @@ def gen_mp3(
     except ffmpeg.Error as e:
         stderr = e.stderr.decode() if e.stderr else str(e)
         logger.warning(f"FFmpeg concat failed: {stderr}. Trying simple concat...")
-        # Fallback: concat without metadata
         try:
-            inputs = [ffmpeg.input(str(f)) for f in files]
+            inputs = [ffmpeg.input(str(f)) for f in downloaded]
             (
                 ffmpeg.concat(*inputs, v=0, a=1)
                 .output(
@@ -109,4 +117,56 @@ def gen_mp3(
         if temp.exists():
             temp.unlink()
 
+    if progress_cb: progress_cb(85)
+
+    # Strip any embedded album art (APIC ID3 tag) from the output MP3
+    _strip_album_art(output_path)
+
+    if progress_cb: progress_cb(100)
     return output_path
+
+
+def _strip_album_art(path: Path) -> None:
+    """Remove embedded album art by rewriting the file without any video streams or APIC tags.
+    Uses ffmpeg with -map_metadata -1 to drop all metadata, then re-reads ID3 from the file
+    and re-adds only text tags. Since gen_mp3 already sets map_metadata=-1 during concat,
+    album art can only come from the individual source MP3s being concatenated. We strip
+    by passing through the audio, dropping all streams except audio, and writing clean tags.
+    """
+    tmp = path.with_suffix(".strip.mp3")
+    try:
+        # Read existing title/artist from the file before stripping
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_entries",
+             "format_tags=title,artist", str(path)],
+            capture_output=True, text=True,
+        )
+        import json
+        tags = {}
+        try:
+            info = json.loads(probe.stdout)
+            tags = info.get("format", {}).get("tags", {})
+        except Exception:
+            pass
+
+        cmd = [
+            "ffmpeg", "-y", "-i", str(path),
+            "-map", "0:a",          # audio only — drops all video/image streams
+            "-c:a", "copy",         # no re-encode
+            "-map_metadata", "-1",  # drop ALL metadata (including APIC ID3 frames)
+            "-id3v2_version", "3",
+        ]
+        # Re-add text tags only
+        if tags.get("title"):  cmd += ["-metadata", f"title={tags['title']}"]
+        if tags.get("artist"): cmd += ["-metadata", f"artist={tags['artist']}"]
+        cmd.append(str(tmp))
+
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
+            tmp.replace(path)
+        else:
+            if tmp.exists(): tmp.unlink()
+            logger.warning("Album art strip produced empty/failed output for %s", path)
+    except Exception as e:
+        logger.warning("Album art strip failed for %s: %s", path, e)
+        if tmp.exists(): tmp.unlink()

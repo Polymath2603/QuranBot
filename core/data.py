@@ -27,11 +27,18 @@ def load_quran_text(data_dir: Path) -> list[str]:
 
 
 def get_sura_name(quran_data: dict[str, Any], sura_num: int, lang: str = "ar") -> str:
-    """Get sura name in specified language."""
+    """Get bare sura name (no prefix)."""
     entry = quran_data["Sura"][sura_num]
     if lang == "ar":
-        return entry[4] if len(entry) > 4 else f"Sura {sura_num}"
+        return entry[4] if len(entry) > 4 else f"سورة {sura_num}"
     return entry[5] if len(entry) > 5 else entry[4] if len(entry) > 4 else f"Sura {sura_num}"
+
+
+def get_sura_display_name(quran_data: dict[str, Any], sura_num: int, lang: str = "ar") -> str:
+    """Get sura name always prefixed: 'سورة الإخلاص' / 'Surah Al-Ikhlas'."""
+    bare = get_sura_name(quran_data, sura_num, lang)
+    prefix = "سورة" if lang == "ar" else "Surah"
+    return f"{prefix} {bare}"
 
 
 def get_sura_aya_count(quran_data: dict[str, Any], sura_num: int) -> int:

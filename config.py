@@ -9,8 +9,8 @@ DATA_DIR   = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "output"
 LOCALE_DIR = BASE_DIR / "locales"
 
-BOT_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHANNEL_URL = ""
+BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
+CHANNEL_URL = os.getenv("CHANNEL_URL", "")
 AUDIO_API   = "https://everyayah.com/data"
 QURAN_API   = "https://api.alquran.cloud/v1"
 # ---------------------------------------------------------------------------
@@ -24,19 +24,18 @@ DOWNLOAD_TIMEOUT     = 30
 # Video
 # ---------------------------------------------------------------------------
 VIDEO_FPS           = 23
-VIDEO_FADE_DURATION = 1        # seconds between verse transitions
-VIDEO_SYNC_OFFSET   = -0.2     # fixed seconds to shift text track forward relative to audio
-VIDEO_FONT_SIZE     = 30       # starting font size, auto-shrinks to fit
-VIDEO_MIN_FONT_SIZE = 23
-VIDEO_PADDING       = 40       # px padding inside frame
-VIDEO_FALLBACK_DUR  = 5.0      # seconds/verse fallback when MP3 not cached
+VIDEO_FADE_DURATION = 1          # seconds between verse transitions
+VIDEO_SYNC_OFFSET   = -0.3       # fixed seconds to shift text track forward relative to audio
+VIDEO_FONT_SIZE     = 36         # starting font size, auto-shrinks to fit
+VIDEO_MIN_FONT_SIZE = 26
+VIDEO_PADDING       = 38         # px padding inside frame
+VIDEO_FALLBACK_DUR  = 5.0        # seconds/verse fallback when MP3 not cached
 FONT_PATH           = str(DATA_DIR / "KFGQPC Uthmanic Script HAFS.otf.ttf")
-BG_DIR              = DATA_DIR / "backgrounds"
 
 # Portrait 9:16 and landscape 16:9 — kept small for fast encode
 VIDEO_SIZES = {
-    "portrait":  (630, 1120),
-    "landscape": (1120, 630),
+    "portrait":  (720, 1280),
+    "landscape": (1280, 720),
 }
 VIDEO_DEFAULT_RATIO = "landscape"
 
@@ -52,9 +51,9 @@ RATE_MAX_REQUESTS   = 10
 # Admin & request limits
 # ---------------------------------------------------------------------------
 # Telegram user IDs allowed to use /admin — add yours here
-ADMIN_IDS: list = [8425074393]
+ADMIN_IDS: list = [ int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") ]
 # Max ayas allowed per single audio/video request
-MAX_AYAS_PER_REQUEST = 50
+MAX_AYAS_PER_REQUEST = 40
 
 # ---------------------------------------------------------------------------
 # Voices

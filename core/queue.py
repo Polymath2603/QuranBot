@@ -74,9 +74,11 @@ class RequestQueue:
             if item.status == "processing":
                 item.status = "pending"
         session.commit()
+        # Collect ids while session is still open — avoids DetachedInstanceError
+        pending_ids = [item.id for item in pending]
         session.close()
-        for item in pending:
-            await self._queue.put(item.id)
+        for item_id in pending_ids:
+            await self._queue.put(item_id)
         asyncio.get_event_loop().create_task(self._consume())
 
     async def enqueue(self, bot, user_id: int, chat_id: int,

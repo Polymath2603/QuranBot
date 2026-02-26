@@ -18,7 +18,8 @@ from config import (
 )
 from core.data import (
     load_quran_data, load_quran_text,
-    get_sura_name, get_sura_aya_count, get_sura_start_index,
+    get_sura_name, get_sura_display_name,
+    get_sura_aya_count, get_sura_start_index,
 )
 from core.search    import search
 from core.tafsir    import get_tafsir
@@ -44,10 +45,33 @@ logging.basicConfig(format="%(asctime)s %(name)s %(levelname)s %(message)s", lev
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-_WORKER_POOL = ThreadPoolExecutor(max_workers=2)   # 2 workers: one audio, one video
+_WORKER_POOL = ThreadPoolExecutor(max_workers=2)
 
 quran_data = None
 verses     = None
+
+
+# ---------------------------------------------------------------------------
+# Display helpers
+# ---------------------------------------------------------------------------
+
+def _fmt_label(fmt: str, lang: str) -> str:
+    return t({"msg": "fmt_msg", "lrc": "fmt_lrc", "srt": "fmt_srt"}.get(fmt, "fmt_msg"), lang)
+
+def _tafsir_label(source: str, lang: str) -> str:
+    return t({"muyassar": "tafsir_muyassar", "jalalayn": "tafsir_jalalayn"}.get(source, "tafsir_muyassar"), lang)
+
+def _sura_title(quran_data, sura, lang, start, end=None) -> str:
+    """Return display title like 'سورة الإخلاص (١)' using display name."""
+    name  = get_sura_display_name(quran_data, sura, lang)
+    count = get_sura_aya_count(quran_data, sura)
+    if end is None or start == end:
+        if start == 1 and count == 1:
+            return name
+        return f"{name} ({start})"
+    if start == 1 and end == count:
+        return name
+    return f"{name} ({start}-{end})"
 
 
 # ---------------------------------------------------------------------------
@@ -126,8 +150,8 @@ async def download_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = get_sura_aya_count(quran_data, sura)
     fmt   = user.get_preference("text_format", "msg")
     await query.edit_message_text(
-        f"📖 {get_sura_name(quran_data, sura, lang)}",
-        reply_markup=build_verse_keyboard(sura, 1, count, lang, fmt),
+        f"📖 {get_sura_display_name(quran_data, sura, lang)}",
+        reply_markup=build_verse_keyboard(sura, 1, count, lang, fmt, quran_data),
     )
 
 
@@ -143,30 +167,31 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user         = get_db_user(update.effective_user)
     lang         = user.language
     voice        = user.voice or DEFAULT_VOICE
-    fmt          = user.get_preference("text_format", "txt")
+    fmt          = user.get_preference("text_format", "msg")
     voice_info   = VOICES.get(voice, {"ar": voice, "en": voice})
     reciter_name = voice_info.get(lang, voice_info.get("en", voice))
-    tafsir_label = t(user.tafsir_source, lang)
-    if tafsir_label == user.tafsir_source:
-        tafsir_label = user.tafsir_source.capitalize()
-    lang_name  = t("lang_name_ar", lang) if lang == "ar" else t("lang_name_en", lang)
-    other_lang = t("lang_name_en", lang) if lang == "ar" else t("lang_name_ar", lang)
+    tafsir_lbl   = _tafsir_label(user.tafsir_source, lang)
+    fmt_lbl      = _fmt_label(fmt, lang)
+    lang_name    = t("lang_name_ar", lang) if lang == "ar" else t("lang_name_en", lang)
+    other_lang   = t("lang_name_en", lang) if lang == "ar" else t("lang_name_ar", lang)
 
+    ratio     = user.get_preference("video_ratio", VIDEO_DEFAULT_RATIO)
+    ratio_lbl = t("ratio_portrait", lang) if ratio == "portrait" else t("ratio_landscape", lang)
     keyboard = [
         [
-            InlineKeyboardButton(f"🌐 {other_lang}",            callback_data="setting_lang_toggle"),
-            InlineKeyboardButton(f"📄 {fmt}",                   callback_data="setting_format_toggle"),
+            InlineKeyboardButton(f"🌐 {other_lang}",             callback_data="setting_lang_toggle"),
+            InlineKeyboardButton(f"📄 {fmt_lbl}",                callback_data="setting_format_toggle"),
         ],
         [
-            InlineKeyboardButton(f"📖 {tafsir_label}",          callback_data="setting_tafsir_toggle"),
-            InlineKeyboardButton(t("video_settings", lang),     callback_data="menu_video_settings"),
+            InlineKeyboardButton(f"📖 {tafsir_lbl}",             callback_data="setting_tafsir_toggle"),
+            InlineKeyboardButton(f"🎬 {ratio_lbl}",              callback_data="vtoggle_ratio"),
         ],
         [InlineKeyboardButton(f"🎙️ {t('choose_voice', lang)}", callback_data="voice_list_0")],
-        [InlineKeyboardButton(t("back", lang),                  callback_data="menu_main")],
+        [InlineKeyboardButton(t("back", lang),                   callback_data="menu_main")],
     ]
     await query.edit_message_text(
         t("settings_title", lang, reciter=reciter_name, language=lang_name,
-          tafsir_source=tafsir_label, fmt=fmt),
+          tafsir_source=tafsir_lbl, fmt=fmt_lbl),
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
@@ -179,8 +204,8 @@ async def setting_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def setting_format_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user    = get_db_user(update.effective_user)
-    formats = ["msg", "txt", "lrc", "srt"]
-    current = user.get_preference("text_format", "txt")
+    formats = ["msg", "lrc", "srt"]
+    current = user.get_preference("text_format", "msg")
     try:    idx = formats.index(current)
     except: idx = 0
     new_fmt = formats[(idx + 1) % len(formats)]
@@ -251,53 +276,19 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 # Video settings  (bg toggle hidden — code unchanged, button removed from UI)
 # ---------------------------------------------------------------------------
+# Ratio toggle (inline in settings)
+# ---------------------------------------------------------------------------
 
-async def video_settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def ratio_toggle_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try: await query.answer()
     except Exception: pass
-
-    user   = get_db_user(update.effective_user)
-    lang   = user.language
-    color  = user.get_preference("video_color",  "white")
-    border = user.get_preference("video_border", "on")
-    ratio  = user.get_preference("video_ratio",  VIDEO_DEFAULT_RATIO)
-
-    keyboard = [
-        [InlineKeyboardButton(f"{t('video_color', lang)}: {t(color, lang)}", callback_data="vtoggle_color")],
-        [InlineKeyboardButton(
-            f"{t('video_border', lang)}: {t('on' if border == 'on' else 'off_label', lang)}",
-            callback_data="vtoggle_border",
-        )],
-        [InlineKeyboardButton(
-            f"{t('video_ratio', lang)}: {t('portrait' if ratio == 'portrait' else 'landscape', lang)}",
-            callback_data="vtoggle_ratio",
-        )],
-        [InlineKeyboardButton(t("back", lang), callback_data="menu_settings")],
-    ]
-    await query.edit_message_text(t("video_settings", lang), reply_markup=InlineKeyboardMarkup(keyboard))
-
-
-async def video_toggle_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    try: await query.answer()
-    except Exception: pass
-
     session = get_session()
     db_user = session.query(User).filter_by(telegram_id=update.effective_user.id).first()
-    toggles = {
-        # vtoggle_bg intentionally not in UI but code left intact
-        "vtoggle_bg":     ("video_bg",     "black",             {"black": "white", "white": "random", "random": "black"}),
-        "vtoggle_color":  ("video_color",  "white",             {"white": "black", "black": "white"}),
-        "vtoggle_border": ("video_border", "on",                {"on": "off", "off": "on"}),
-        "vtoggle_ratio":  ("video_ratio",  VIDEO_DEFAULT_RATIO, {"landscape": "portrait", "portrait": "landscape"}),
-    }
-    if query.data in toggles:
-        pref, default, mapping = toggles[query.data]
-        current = db_user.get_preference(pref, default)
-        db_user.set_preference(pref, mapping.get(current, default))
+    cur = db_user.get_preference("video_ratio", VIDEO_DEFAULT_RATIO)
+    db_user.set_preference("video_ratio", "portrait" if cur == "landscape" else "landscape")
     session.commit(); session.close()
-    await video_settings_handler(update, context)
+    await settings_handler(update, context)
 
 
 # ---------------------------------------------------------------------------
@@ -366,10 +357,7 @@ _PROGRESS_KEYS = {
 
 
 async def _process_queue_item(bot, item_id: int):
-    """
-    Called by the queue consumer for each item.
-    Reads params from DB, generates audio/video, sends to user.
-    """
+    """Called by the queue consumer for each item."""
     session = get_session()
     item    = session.query(QueueItem).filter_by(id=item_id).first()
     if not item:
@@ -377,129 +365,138 @@ async def _process_queue_item(bot, item_id: int):
     params   = item.params()
     lang     = item.lang
     chat_id  = item.chat_id
-    msg_id   = item.status_msg_id
     req_type = item.request_type
     session.close()
 
-    loop = asyncio.get_event_loop()
+    loop    = asyncio.get_event_loop()
     last_pct = [-1]
 
-    async def _safe_edit(text, reply_markup=None):
-        if not msg_id: return
-        try:
-            await bot.edit_message_text(
-                chat_id=chat_id, message_id=msg_id,
-                text=text, reply_markup=reply_markup,
-            )
-        except Exception: pass
-
-    def _make_progress_cb():
+    def _make_progress_cb(edit_fn):
         STEPS = [0, 20, 40, 60, 80, 100]
         def _cb(pct: int, _msg: str = ""):
             step = max((s for s in STEPS if s <= pct), default=0)
             if step == last_pct[0]: return
             last_pct[0] = step
-            bar   = "▰" * (step // 20) + "▱" * (5 - step // 20)
-            label = t(_PROGRESS_KEYS.get(step, "progress_rendering"), lang)
-            text  = f"🎬 {t('generating_video', lang)}\n{bar} {step}%\n{label}"
-            asyncio.run_coroutine_threadsafe(_safe_edit(text), loop)
+            bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
+            text = f"🎬\n{bar} {step}%"
+            asyncio.run_coroutine_threadsafe(edit_fn(text), loop)
         return _cb
 
     if req_type == "audio":
-        voice       = params["voice"]
-        sura        = params["sura"]
-        start_aya   = params["start_aya"]
-        end_aya     = params["end_aya"]
-        title       = params["title"]
-        artist_name = params["artist_name"]
-        fid_key     = f"audio:{voice}:{sura}:{start_aya}:{end_aya}"
+        reciter_code = params["reciter_code"]
+        sura         = params["sura"]
+        start_aya    = params["start_aya"]
+        end_aya      = params["end_aya"]
+        title        = params["title"]
+        reciter      = params["reciter"]
+        fid_key      = f"audio:{reciter_code}:{sura}:{start_aya}:{end_aya}"
 
         cached = get_file_id(fid_key)
         if cached:
             await bot.send_audio(chat_id=chat_id, audio=cached,
-                                 title=title, performer=artist_name,
-                                 caption=f"🎧 {artist_name}")
+                                 caption=t("audio_caption", lang, title=title, reciter=reciter))
         else:
+            prog_msg = await bot.send_message(chat_id=chat_id, text="🎧\n▱▱▱▱▱ 0%")
+            prog_id  = prog_msg.message_id
+
+            async def _edit_audio(text):
+                try: await bot.edit_message_text(chat_id=chat_id, message_id=prog_id, text=text)
+                except Exception: pass
+
+            async def _delete_audio():
+                try: await bot.delete_message(chat_id=chat_id, message_id=prog_id)
+                except Exception: pass
+
+            def _audio_progress_cb():
+                last = [-1]
+                STEPS = [0, 20, 40, 60, 80, 100]
+                def _cb(pct: int):
+                    step = max((s for s in STEPS if s <= pct), default=0)
+                    if step == last[0]: return
+                    last[0] = step
+                    bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
+                    asyncio.run_coroutine_threadsafe(
+                        _edit_audio(f"🎧\n{bar} {step}%"), loop
+                    )
+                return _cb
+
             def _gen():
                 check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
-                return gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, voice,
-                               sura, start_aya, sura, end_aya, title=title, artist=artist_name)
+                return gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
+                               sura, start_aya, sura, end_aya, title=title, artist=reciter,
+                               progress_cb=_audio_progress_cb())
             mp3_path = await loop.run_in_executor(_WORKER_POOL, _gen)
+            await _delete_audio()
             with open(mp3_path, "rb") as f:
-                sent = await bot.send_audio(chat_id=chat_id, audio=f,
-                                            title=title, performer=artist_name,
-                                            filename=f"{safe_filename(title)}.mp3",
-                                            caption=f"🎧 {artist_name}")
+                sent = await bot.send_audio(
+                    chat_id=chat_id, audio=f,
+                    filename=f"{safe_filename(title)}.mp3",
+                    caption=t("audio_caption", lang, title=title, reciter=reciter),
+                )
             if sent and sent.audio:
                 set_file_id(fid_key, sent.audio.file_id)
 
-        await bot.send_message(chat_id=chat_id, text=t("queue_done_audio", lang))
-
     elif req_type == "video":
-        voice       = params["voice"]
-        sura        = params["sura"]
-        start_aya   = params["start_aya"]
-        end_aya     = params["end_aya"]
-        title       = params["title"]
-        artist_name = params["artist_name"]
-        bg_mode     = params.get("bg_mode", "black")
-        txt_color   = params.get("txt_color", "white")
-        border      = params.get("border", True)
-        ratio       = params.get("ratio", VIDEO_DEFAULT_RATIO)
-
-        bg_bit     = {"black": 0, "white": 1, "random": 2}.get(bg_mode, 0)
-        color_bit  = 0 if txt_color == "white" else 1
-        border_bit = 1 if border else 0
-        ratio_bit  = 0 if ratio == "landscape" else 1
-        fid_key    = f"video:{voice}:{sura}:{start_aya}:{end_aya}:{bg_bit}{color_bit}{border_bit}{ratio_bit}"
+        reciter_code = params["reciter_code"]
+        sura         = params["sura"]
+        start_aya    = params["start_aya"]
+        end_aya      = params["end_aya"]
+        title        = params["title"]
+        reciter      = params["reciter"]
+        ratio        = params.get("ratio", VIDEO_DEFAULT_RATIO)
+        ratio_bit    = 0 if ratio == "landscape" else 1
+        fid_key      = f"video:{reciter_code}:{sura}:{start_aya}:{end_aya}:{ratio_bit}"
 
         cached = get_file_id(fid_key)
         if cached:
-            await _safe_edit(f"🎬 {t('generating_video', lang)}\n▰▰▰▰▰ 100%\n{t('progress_uploading', lang)}")
             await bot.send_video(chat_id=chat_id, video=cached,
-                                 caption=t("video_caption", lang, title=title, reciter=artist_name))
+                                 caption=t("video_caption", lang, title=title, reciter=reciter))
         else:
-            await _safe_edit(f"🎬 {t('generating_video', lang)}\n▱▱▱▱▱ 0%")
+            prog_msg = await bot.send_message(chat_id=chat_id, text="🎬\n▱▱▱▱▱ 0%")
+            prog_id  = prog_msg.message_id
+
+            async def _edit_video(text):
+                try: await bot.edit_message_text(chat_id=chat_id, message_id=prog_id, text=text)
+                except Exception: pass
+
+            async def _delete_video():
+                try: await bot.delete_message(chat_id=chat_id, message_id=prog_id)
+                except Exception: pass
 
             def _gen():
                 check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
-                mp3 = gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, voice,
-                              sura, start_aya, sura, end_aya, title=title, artist=artist_name)
+                mp3 = gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
+                              sura, start_aya, sura, end_aya, title=title, artist=reciter)
                 start_index = get_sura_start_index(quran_data, sura)
                 vtexts      = [verses[start_index + i - 1] for i in range(start_aya, end_aya + 1)]
-                vdurs       = get_verse_durations(DATA_DIR / "audio", voice, sura, start_aya, end_aya)
-                video       = gen_video(
+                vdurs       = get_verse_durations(DATA_DIR / "audio", reciter_code, sura, start_aya, end_aya)
+                return gen_video(
                     vtexts, start_aya, title, sura, start_aya, end_aya,
-                    voice=voice, audio_path=mp3,
-                    output_dir=OUTPUT_DIR / voice,
-                    bg_mode=bg_mode, text_color_name=txt_color,
-                    border=border, ratio=ratio,
+                    voice=reciter_code, audio_path=mp3,
+                    output_dir=OUTPUT_DIR / reciter_code,
+                    ratio=ratio,
                     verse_durations=vdurs,
-                    progress_cb=_make_progress_cb(),
+                    progress_cb=_make_progress_cb(_edit_video),
                 )
-                return video
 
             video_path = await loop.run_in_executor(_WORKER_POOL, _gen)
-            await _safe_edit(f"🎬 {t('generating_video', lang)}\n▰▰▰▰▰ 100%\n{t('progress_uploading', lang)}")
+            await _delete_video()
             with open(video_path, "rb") as vf:
                 sent = await bot.send_video(
                     chat_id=chat_id, video=vf,
-                    caption=t("video_caption", lang, title=title, reciter=artist_name),
+                    caption=t("video_caption", lang, title=title, reciter=reciter),
                     filename=f"{safe_filename(title)}.mp4",
                 )
             if sent and sent.video:
                 set_file_id(fid_key, sent.video.file_id)
 
-    # Mark done + clean up status message
+    # Mark done
     session = get_session()
     db_item = session.query(QueueItem).filter_by(id=item_id).first()
     if db_item:
         db_item.status = "done"
         session.commit()
     session.close()
-    if msg_id:
-        try: await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-        except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -516,54 +513,45 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         end_aya = int(d[3]) if len(d) > 3 else start_aya
     except (IndexError, ValueError): return
 
-    user  = get_db_user(update.effective_user)
-    lang  = user.language
-    voice = user.voice or DEFAULT_VOICE
+    user         = get_db_user(update.effective_user)
+    lang         = user.language
+    reciter_code = user.voice or DEFAULT_VOICE
     if is_rate_limited(user.telegram_id):
         await query.message.reply_text(t("rate_limited", lang)); return
 
-    voice_info  = VOICES.get(voice, {"en": "Reciter", "ar": "قارئ"})
-    artist_name = voice_info.get(lang, voice_info.get("en", "Reciter"))
-    sura_name   = get_sura_name(quran_data, sura, lang)
-    count       = get_sura_aya_count(quran_data, sura)
+    voice_info = VOICES.get(reciter_code, {"en": "Reciter", "ar": "قارئ"})
+    reciter    = voice_info.get(lang, voice_info.get("en", "Reciter"))
+    count      = get_sura_aya_count(quran_data, sura)
 
-    # Max aya cap
-    n_ayas = end_aya - start_aya + 1
-    if n_ayas > MAX_AYAS_PER_REQUEST:
+    if start_aya < 1 or end_aya > count:
+        await query.message.reply_text(t("aya_out_of_range", lang, min=1, max=count)); return
+    if start_aya > end_aya:
+        await query.message.reply_text(t("invalid_range", lang)); return
+
+    n_ayas  = end_aya - start_aya + 1
+    is_full = (start_aya == 1 and end_aya == count)
+    if not is_full and n_ayas > MAX_AYAS_PER_REQUEST:
         await query.message.reply_text(t("too_many_ayas", lang, max=MAX_AYAS_PER_REQUEST, count=n_ayas))
         return
 
-    title = (
-        sura_name if (start_aya == 1 and end_aya == count)
-        else f"{sura_name} ({start_aya}-{end_aya})" if start_aya != end_aya
-        else f"{sura_name} ({start_aya})"
-    )
-
-    # Check file_id cache first — if cached, send instantly without queuing
-    fid_key = f"audio:{voice}:{sura}:{start_aya}:{end_aya}"
+    title   = _sura_title(quran_data, sura, lang, start_aya, end_aya)
+    fid_key = f"audio:{reciter_code}:{sura}:{start_aya}:{end_aya}"
     cached  = get_file_id(fid_key)
     if cached:
-        await query.message.reply_audio(audio=cached, title=title,
-                                         performer=artist_name, caption=f"🎧 {artist_name}")
+        await query.message.reply_audio(
+            audio=cached,
+            caption=t("audio_caption", lang, title=title, reciter=reciter),
+        )
         return
 
-    # Enqueue
-    pos        = request_queue.position(0) + 1  # rough estimate before insertion
-    status_msg = await query.message.reply_text(t("queue_position", lang, pos=pos))
-    item_id    = await request_queue.enqueue(
+    await request_queue.enqueue(
         context.bot, user.telegram_id, update.effective_chat.id,
         "audio",
-        {"voice": voice, "sura": sura, "start_aya": start_aya,
-         "end_aya": end_aya, "title": title, "artist_name": artist_name},
+        {"reciter_code": reciter_code, "sura": sura, "start_aya": start_aya,
+         "end_aya": end_aya, "title": title, "reciter": reciter},
         lang,
-        status_msg_id=status_msg.message_id,
+        status_msg_id=None,
     )
-    # Edit with real position + cancel button
-    pos = request_queue.position(item_id)
-    kb  = InlineKeyboardMarkup([[InlineKeyboardButton(t("queue_cancel_btn", lang), callback_data=f"queue_cancel_{item_id}")]])
-    try:
-        await status_msg.edit_text(t("queue_position", lang, pos=pos), reply_markup=kb)
-    except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -580,63 +568,48 @@ async def video_generate_handler(update: Update, context: ContextTypes.DEFAULT_T
         end_aya = int(d[3]) if len(d) > 3 else start_aya
     except (IndexError, ValueError): return
 
-    user  = get_db_user(update.effective_user)
-    lang  = user.language
-    voice = user.voice or DEFAULT_VOICE
+    user         = get_db_user(update.effective_user)
+    lang         = user.language
+    reciter_code = user.voice or DEFAULT_VOICE
     if is_rate_limited(user.telegram_id):
         await query.message.reply_text(t("rate_limited", lang)); return
 
-    voice_info  = VOICES.get(voice, {"en": "Reciter", "ar": "قارئ"})
-    artist_name = voice_info.get(lang, voice_info.get("en", "Reciter"))
-    sura_name   = get_sura_name(quran_data, sura, lang)
-    count       = get_sura_aya_count(quran_data, sura)
+    voice_info = VOICES.get(reciter_code, {"en": "Reciter", "ar": "قارئ"})
+    reciter    = voice_info.get(lang, voice_info.get("en", "Reciter"))
+    count      = get_sura_aya_count(quran_data, sura)
 
-    # Max aya cap
-    n_ayas = end_aya - start_aya + 1
-    if n_ayas > MAX_AYAS_PER_REQUEST:
+    if start_aya < 1 or end_aya > count:
+        await query.message.reply_text(t("aya_out_of_range", lang, min=1, max=count)); return
+    if start_aya > end_aya:
+        await query.message.reply_text(t("invalid_range", lang)); return
+
+    n_ayas  = end_aya - start_aya + 1
+    is_full = (start_aya == 1 and end_aya == count)
+    if not is_full and n_ayas > MAX_AYAS_PER_REQUEST:
         await query.message.reply_text(t("too_many_ayas", lang, max=MAX_AYAS_PER_REQUEST, count=n_ayas))
         return
 
-    title = (
-        sura_name if (start_aya == 1 and end_aya == count)
-        else f"{sura_name} ({start_aya}-{end_aya})" if start_aya != end_aya
-        else f"{sura_name} ({start_aya})"
-    )
-    bg_mode = user.get_preference("video_bg",     "black")
-    txt_col = user.get_preference("video_color",  "white")
-    border  = user.get_preference("video_border", "on") == "on"
-    ratio   = user.get_preference("video_ratio",  VIDEO_DEFAULT_RATIO)
-
-    # Check file_id cache — send instantly if already uploaded
-    bg_bit    = {"black": 0, "white": 1, "random": 2}.get(bg_mode, 0)
-    color_bit = 0 if txt_col == "white" else 1
-    bord_bit  = 1 if border else 0
+    title     = _sura_title(quran_data, sura, lang, start_aya, end_aya)
+    ratio     = user.get_preference("video_ratio", VIDEO_DEFAULT_RATIO)
+    ratio_lbl = t("ratio_portrait", lang) if ratio == "portrait" else t("ratio_landscape", lang)
     ratio_bit = 0 if ratio == "landscape" else 1
-    fid_key   = f"video:{voice}:{sura}:{start_aya}:{end_aya}:{bg_bit}{color_bit}{bord_bit}{ratio_bit}"
+    fid_key   = f"video:{reciter_code}:{sura}:{start_aya}:{end_aya}:{ratio_bit}"
     cached    = get_file_id(fid_key)
     if cached:
         await query.message.reply_video(
             video=cached,
-            caption=t("video_caption", lang, title=title, reciter=artist_name),
+            caption=t("video_caption", lang, title=title, reciter=reciter),
         )
         return
 
-    # Enqueue
-    status_msg = await query.message.reply_text(t("generating_video", lang))
-    item_id    = await request_queue.enqueue(
+    await request_queue.enqueue(
         context.bot, user.telegram_id, update.effective_chat.id,
         "video",
-        {"voice": voice, "sura": sura, "start_aya": start_aya, "end_aya": end_aya,
-         "title": title, "artist_name": artist_name,
-         "bg_mode": bg_mode, "txt_color": txt_col, "border": border, "ratio": ratio},
+        {"reciter_code": reciter_code, "sura": sura, "start_aya": start_aya, "end_aya": end_aya,
+         "title": title, "reciter": reciter, "ratio": ratio},
         lang,
-        status_msg_id=status_msg.message_id,
+        status_msg_id=None,
     )
-    pos = request_queue.position(item_id)
-    kb  = InlineKeyboardMarkup([[InlineKeyboardButton(t("queue_cancel_btn", lang), callback_data=f"queue_cancel_{item_id}")]])
-    try:
-        await status_msg.edit_text(t("queue_position", lang, pos=pos), reply_markup=kb)
-    except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -672,14 +645,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         d = query.data.split("_")
         sura, start = int(d[1]), int(d[2])
-        end           = int(d[3]) if len(d) > 3 else start
-        current_start = int(d[4]) if len(d) > 4 else start
+        end        = int(d[3]) if len(d) > 3 else start
+        char_offset = int(d[4]) if len(d) > 4 else 0
     except (IndexError, ValueError): return
 
     user  = get_db_user(update.effective_user)
     lang  = user.language
     voice = user.voice or DEFAULT_VOICE
-    fmt   = user.get_preference("text_format", "txt")
+    fmt   = user.get_preference("text_format", "msg")
 
     durs = None
     if fmt in ("srt", "lrc"):
@@ -690,7 +663,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if start == end:
         await send_text_single(query, sura, start, user, lang, verses, quran_data, durations=durs)
     else:
-        await send_text_range(query, sura, start, end, current_start, user, lang, verses, quran_data, durations=durs)
+        await send_text_range(query, sura, start, end, char_offset, user, lang, verses, quran_data, durations=durs)
 
 
 # ---------------------------------------------------------------------------
@@ -704,34 +677,47 @@ async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         p = query.data.split("_")
         sura, start = int(p[1]), int(p[2])
-        end           = int(p[3]) if len(p) > 3 else start
-        current_start = int(p[4]) if len(p) > 4 else start
+        end          = int(p[3]) if len(p) > 3 else start
+        char_offset  = int(p[4]) if len(p) > 4 else 0   # char offset into the full text block
     except (IndexError, ValueError): return
 
-    current_end = min(current_start + 9, end)
-    user        = get_db_user(update.effective_user)
-    lang        = user.language
-    sura_name   = get_sura_name(quran_data, sura, lang)
-    not_found   = t("tafsir_not_found", lang)
+    user      = get_db_user(update.effective_user)
+    lang      = user.language
+    sura_name = get_sura_display_name(quran_data, sura, lang)
+    not_found = t("tafsir_not_found", lang)
+    MAX_CHARS = 3800
 
+    # Build the full tafsir text once
     if start == end:
-        text = f"📖 {sura_name} ({start}) - {t('tafsir', lang)}\n\n{get_tafsir(sura, start, user.tafsir_source) or not_found}"
+        body = get_tafsir(sura, start, user.tafsir_source) or not_found
+        full_text = f"📖 {sura_name} ({start}) — {t('tafsir', lang)}\n\n{body}"
     else:
-        text = f"📖 {sura_name} ({current_start}-{current_end}) - {t('tafsir', lang)}\n\n"
-        for aya in range(current_start, current_end + 1):
-            text += f"﴿{aya}﴾ {get_tafsir(sura, aya, user.tafsir_source) or not_found}\n\n"
+        lines = [f"📖 {sura_name} ({start}-{end}) — {t('tafsir', lang)}\n"]
+        for aya in range(start, end + 1):
+            lines.append(f"﴿{aya}﴾ {get_tafsir(sura, aya, user.tafsir_source) or not_found}")
+        full_text = "\n\n".join(lines)
+
+    # Slice by char_offset, never cut in the middle of an aya block
+    page_text = full_text[char_offset:char_offset + MAX_CHARS]
+    # Trim to last newline so we don't cut mid-aya
+    next_offset = char_offset + MAX_CHARS
+    if next_offset < len(full_text):
+        cut = page_text.rfind("\n\n")
+        if cut > 0:
+            page_text  = page_text[:cut]
+            next_offset = char_offset + cut + 2
+        else:
+            next_offset = char_offset + MAX_CHARS
 
     nav = []
-    if current_start > start:
-        nav.append(InlineKeyboardButton("◀️", callback_data=f"tafpage_{sura}_{start}_{end}_{max(start, current_start-10)}"))
-    if current_end < end:
-        nav.append(InlineKeyboardButton("▶️", callback_data=f"tafpage_{sura}_{start}_{end}_{current_end+1}"))
+    if char_offset > 0:
+        prev_off = max(0, char_offset - MAX_CHARS)
+        nav.append(InlineKeyboardButton("◀️", callback_data=f"tafpage_{sura}_{start}_{end}_{prev_off}"))
+    if next_offset < len(full_text):
+        nav.append(InlineKeyboardButton("▶️", callback_data=f"tafpage_{sura}_{start}_{end}_{next_offset}"))
     keyboard = ([nav] if nav else []) + [[InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{start}_{end}")]]
 
-    if len(text) <= 4000:
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        await send_paged_message(query.message, text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(page_text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 # ---------------------------------------------------------------------------
@@ -751,11 +737,8 @@ async def back_to_verse_handler(update: Update, _context: ContextTypes.DEFAULT_T
     user    = get_db_user(update.effective_user)
     lang    = user.language
     fmt     = user.get_preference("text_format", "msg")
-    count   = get_sura_aya_count(quran_data, sura)
-    name    = get_sura_name(quran_data, sura, lang)
-    is_full = (start == 1 and end == count)
-    title   = f"📖 {name}" if is_full else f"📖 {name} ({start}-{end})" if start != end else f"📖 {name} ({start})"
-    await query.edit_message_text(title, reply_markup=build_verse_keyboard(sura, start, end, lang, fmt))
+    title   = f"📖 {_sura_title(quran_data, sura, lang, start, end)}"
+    await query.edit_message_text(title, reply_markup=build_verse_keyboard(sura, start, end, lang, fmt, quran_data))
 
 
 # ---------------------------------------------------------------------------
@@ -808,6 +791,65 @@ async def page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, page_
 
 
 # ---------------------------------------------------------------------------
+# Search helpers
+# ---------------------------------------------------------------------------
+
+MAX_SEARCH_PAGE_CHARS = 3500
+
+async def _send_search_results(message, results: list, query_text: str, lang: str, page_offset: int):
+    """
+    Send search results as a message with verse text and 2-per-row sura+aya buttons.
+    Page by character length — never cuts a result in the middle.
+    page_offset: index into results list for this page.
+    """
+    MAX_RESULTS = 50   # hard cap on total results shown
+    results = results[:MAX_RESULTS]
+
+    # Build text block and button list for results starting at page_offset
+    text_parts = [t("search_results_hdr", lang, query=query_text)]
+    buttons_for_page: list[dict] = []
+    char_count = len(text_parts[0]) + 2
+
+    i = page_offset
+    while i < len(results):
+        r     = results[i]
+        sname = get_sura_display_name(quran_data, r["sura"], lang)
+        line  = f"\n﴿{r['text']}﴾\n— {sname} ({r['aya']})"
+        if char_count + len(line) > MAX_SEARCH_PAGE_CHARS and buttons_for_page:
+            break  # page full, stop here
+        text_parts.append(line)
+        char_count += len(line)
+        buttons_for_page.append({"sura": r["sura"], "aya": r["aya"], "sname": sname})
+        i += 1
+
+    next_offset = i  # first result index of next page
+
+    # Build 2-per-row keyboard
+    rows = []
+    row  = []
+    for b in buttons_for_page:
+        btn_text = f"{b['sname']} {b['aya']}"
+        row.append(InlineKeyboardButton(btn_text, callback_data=f"search_result_{b['sura']}_{b['aya']}"))
+        if len(row) == 2:
+            rows.append(row); row = []
+    if row: rows.append(row)
+
+    # Navigation row
+    nav = []
+    if page_offset > 0:
+        # find previous page offset — walk back
+        prev = max(0, page_offset - len(buttons_for_page))
+        nav.append(InlineKeyboardButton(t("search_prev", lang), callback_data=f"search_page_{prev}_{query_text[:40]}"))
+    if next_offset < len(results):
+        nav.append(InlineKeyboardButton(t("search_more", lang), callback_data=f"search_page_{next_offset}_{query_text[:40]}"))
+    if nav:
+        rows.append(nav)
+
+    full_text = "\n".join(text_parts)
+    await message.reply_text(full_text, reply_markup=InlineKeyboardMarkup(rows) if rows else None)
+
+
+# ---------------------------------------------------------------------------
 # Message router (NLU)
 # ---------------------------------------------------------------------------
 
@@ -821,21 +863,21 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if intent["type"] == "aya":
         sura, aya = intent["sura"], intent["aya"]
         await update.message.reply_text(
-            f"📖 {get_sura_name(quran_data, sura, lang)} ({aya})",
-            reply_markup=build_verse_keyboard(sura, aya, aya, lang, fmt),
+            f"📖 {_sura_title(quran_data, sura, lang, aya)}",
+            reply_markup=build_verse_keyboard(sura, aya, aya, lang, fmt, quran_data),
         )
     elif intent["type"] == "range":
         sura, start, end = intent["sura"], intent["from_aya"], intent["to_aya"]
-        count = get_sura_aya_count(quran_data, sura)
-        name  = get_sura_name(quran_data, sura, lang)
-        title = f"📖 {name}" if (start == 1 and end == count) else f"📖 {name} ({start}-{end})"
-        await update.message.reply_text(title, reply_markup=build_verse_keyboard(sura, start, end, lang, fmt))
+        await update.message.reply_text(
+            f"📖 {_sura_title(quran_data, sura, lang, start, end)}",
+            reply_markup=build_verse_keyboard(sura, start, end, lang, fmt, quran_data),
+        )
     elif intent["type"] == "surah":
         sura  = intent["sura"]
         count = get_sura_aya_count(quran_data, sura)
         await update.message.reply_text(
-            f"📖 {get_sura_name(quran_data, sura, lang)}",
-            reply_markup=build_verse_keyboard(sura, 1, count, lang, fmt),
+            f"📖 {get_sura_display_name(quran_data, sura, lang)}",
+            reply_markup=build_verse_keyboard(sura, 1, count, lang, fmt, quran_data),
         )
     elif intent["type"] == "page":
         await page_handler(update, context, intent["page"])
@@ -843,17 +885,7 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         results = search(quran_data, verses, update.message.text)
         if not results:
             await update.message.reply_text(t("no_results", lang)); return
-        # Show up to 8 results as tappable buttons → each opens the verse keyboard
-        header  = f"{t('search_results_hdr', lang, query=update.message.text)}\n{t('search_tap_hint', lang)}"
-        buttons = []
-        for r in results[:8]:
-            sname  = get_sura_name(quran_data, r["sura"], lang)
-            label  = f"{sname} {r['aya']} — {r['text'][:40]}…" if len(r["text"]) > 40 else f"{sname} {r['aya']} — {r['text']}"
-            buttons.append([InlineKeyboardButton(
-                label,
-                callback_data=f"search_result_{r['sura']}_{r['aya']}",
-            )])
-        await update.message.reply_text(header, reply_markup=InlineKeyboardMarkup(buttons))
+        await _send_search_results(update.message, results, update.message.text, lang, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -873,16 +905,67 @@ async def search_result_handler(update: Update, context: ContextTypes.DEFAULT_TY
     user  = get_db_user(update.effective_user)
     lang  = user.language
     fmt   = user.get_preference("text_format", "msg")
-    name  = get_sura_name(quran_data, sura, lang)
+    name  = get_sura_display_name(quran_data, sura, lang)
     idx   = get_sura_start_index(quran_data, sura)
     text  = verses[idx + aya - 1]
     title = f"📖 {name} ({aya})"
-    response = f"{title}\n\n﴿ {text} ﴾"
-    kb = build_verse_keyboard(sura, aya, aya, lang, fmt)
+    response = f"{title}\n\n﴿ {text} ({aya}) ﴾"
+    kb = build_verse_keyboard(sura, aya, aya, lang, fmt, quran_data)
     if len(response) <= 4000:
         await query.edit_message_text(response, reply_markup=kb)
     else:
         await send_paged_message(query.message, response, reply_markup=kb)
+
+
+async def search_page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle search result pagination (search_page_{offset}_{query})."""
+    query = update.callback_query
+    try: await query.answer()
+    except Exception: pass
+    try:
+        parts      = query.data.split("_", 3)   # search_page_{offset}_{query}
+        page_offset = int(parts[2])
+        query_text  = parts[3] if len(parts) > 3 else ""
+    except (IndexError, ValueError): return
+
+    user    = get_db_user(update.effective_user)
+    lang    = user.language
+    results = search(quran_data, verses, query_text)
+    if not results:
+        await query.answer(t("no_results", lang), show_alert=True); return
+    # Edit current message with new page
+    await query.message.delete()
+    await _send_search_results(query.message, results, query_text, lang, page_offset)
+
+
+# ---------------------------------------------------------------------------
+# /help
+# ---------------------------------------------------------------------------
+
+async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_db_user(update.effective_user)
+    await update.message.reply_text(t("help_text", user.language), parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
+# /feedback
+# ---------------------------------------------------------------------------
+
+async def feedback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user    = get_db_user(update.effective_user)
+    lang    = user.language
+    text    = (update.message.text or "").partition(" ")[2].strip()
+    if not text:
+        await update.message.reply_text(t("feedback_empty", lang)); return
+    if not ADMIN_IDS:
+        await update.message.reply_text(t("feedback_no_admin", lang)); return
+    tg      = update.effective_user
+    msg     = t("feedback_msg", lang, name=tg.full_name or "—",
+                username=tg.username or "—", uid=tg.id, text=text)
+    for aid in ADMIN_IDS:
+        try: await context.bot.send_message(chat_id=aid, text=msg)
+        except Exception: pass
+    await update.message.reply_text(t("feedback_received", lang))
 
 
 # ---------------------------------------------------------------------------
@@ -900,10 +983,17 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     from core.queue  import QueueItem
     from sqlalchemy  import func as _func
+    from core.utils  import _rate_store
+    from config      import RATE_WINDOW_SECONDS, RATE_MAX_REQUESTS
+    import time as _time
 
-    session     = get_session()
-    total_users = session.query(User).count()
-    pending_q   = session.query(QueueItem).filter_by(status="pending").count()
+    session        = get_session()
+    total_users    = session.query(User).count()
+    ar_users       = session.query(User).filter_by(language="ar").count()
+    en_users       = session.query(User).filter_by(language="en").count()
+    pending_q      = session.query(QueueItem).filter_by(status="pending").count()
+    processing_q   = session.query(QueueItem).filter_by(status="processing").count()
+    done_q         = session.query(QueueItem).filter_by(status="done").count()
     top_voices_raw = (
         session.query(User.voice, _func.count(User.id).label("cnt"))
         .group_by(User.voice)
@@ -913,19 +1003,37 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     session.close()
 
+    # Count currently rate-limited users
+    now_t = _time.monotonic()
+    limited_count = sum(
+        1 for ts in _rate_store.values()
+        if len([x for x in ts if now_t - x < RATE_WINDOW_SECONDS]) >= RATE_MAX_REQUESTS
+    )
+
     free_mb    = get_free_mb(OUTPUT_DIR)
     cache_size = file_id_count()
+
+    # Count cached output files on disk
+    cached_files = sum(1 for _ in OUTPUT_DIR.rglob("*") if _.is_file() and _.suffix in (".mp3", ".mp4"))
 
     lines = [
         t("admin_title", lang),
         "",
         t("admin_users",  lang, count=total_users),
+        f"  🇸🇦 {ar_users}  🌐 {en_users}",
         t("admin_queue",  lang, pending=pending_q),
-        t("admin_disk",   lang, free_mb=free_mb),
-        t("admin_cache",  lang, count=cache_size),
-        "",
-        t("admin_top_voices", lang),
     ]
+    if processing_q:
+        lines.append(t("admin_processing", lang, count=processing_q))
+    lines += [
+        f"  ✅ {t('done', lang)}: {done_q}",
+        t("admin_disk",   lang, free_mb=round(free_mb, 1)),
+        t("admin_cache",  lang, count=cache_size),
+        t("admin_cached_files", lang, count=cached_files),
+    ]
+    if limited_count:
+        lines.append(t("admin_rate_limited", lang, count=limited_count))
+    lines += ["", t("admin_top_voices", lang)]
     for voice_code, cnt in top_voices_raw:
         info  = VOICES.get(voice_code or DEFAULT_VOICE, {"en": voice_code})
         vname = info.get(lang, info.get("en", voice_code))
@@ -956,10 +1064,10 @@ _EXACT: dict = {
     "menu_settings":         settings_handler,
     "menu_donate":           donate_handler,
     "menu_download":         lambda u, c: show_sura_list(u, 0),
-    "menu_video_settings":   video_settings_handler,
     "setting_lang_toggle":   setting_lang_toggle,
     "setting_format_toggle": setting_format_toggle,
     "setting_tafsir_toggle": setting_tafsir_toggle,
+    "vtoggle_ratio":        ratio_toggle_handler,
 }
 
 _PREFIX: list[tuple] = [
@@ -967,7 +1075,6 @@ _PREFIX: list[tuple] = [
     ("download_",    download_handler),
     ("voice_list_",  voice_list_handler),
     ("voice_",       voice_handler),
-    ("vtoggle_",     video_toggle_handler),
     ("stars_",       stars_handler),
     ("play_",        play_audio_handler),
     ("vid_",         video_generate_handler),
@@ -979,6 +1086,7 @@ _PREFIX: list[tuple] = [
     ("page_",        page_handler),
     ("queue_cancel_",   queue_cancel_handler),
     ("search_result_",  search_result_handler),
+    ("search_page_",    search_page_handler),
 ]
 
 
@@ -1021,7 +1129,9 @@ def main():
     )
     app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_handler))
+    app.add_handler(CommandHandler("help",     help_handler))
+    app.add_handler(CommandHandler("feedback", feedback_handler))
+    app.add_handler(CommandHandler("admin",    admin_handler))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
