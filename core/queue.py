@@ -66,65 +66,72 @@ class RequestQueue:
         self._bot = bot
         # Load any pending items from DB (survived restart)
         session = get_session()
-        pending = session.query(QueueItem).filter(
-            QueueItem.status.in_(["pending", "processing"])
-        ).order_by(QueueItem.id).all()
-        # Reset "processing" back to pending (interrupted by restart)
-        for item in pending:
-            if item.status == "processing":
-                item.status = "pending"
-        session.commit()
-        # Collect ids while session is still open — avoids DetachedInstanceError
-        pending_ids = [item.id for item in pending]
-        session.close()
+        try:
+            pending = session.query(QueueItem).filter(
+                QueueItem.status.in_(["pending", "processing"])
+            ).order_by(QueueItem.id).all()
+            # Reset "processing" back to pending (interrupted by restart)
+            for item in pending:
+                if item.status == "processing":
+                    item.status = "pending"
+            session.commit()
+            # Collect ids while session is still open — avoids DetachedInstanceError
+            pending_ids = [item.id for item in pending]
+        finally:
+            session.close()
         for item_id in pending_ids:
             await self._queue.put(item_id)
-        asyncio.get_event_loop().create_task(self._consume())
+        asyncio.create_task(self._consume())
 
     async def enqueue(self, bot, user_id: int, chat_id: int,
                       request_type: str, params: dict, lang: str,
-                      status_msg_id: int | None = None) -> QueueItem:
+                      status_msg_id: int | None = None) -> int:
         session = get_session()
-        item = QueueItem(
-            user_id      = user_id,
-            chat_id      = chat_id,
-            request_type = request_type,
-            params_json  = json.dumps(params, ensure_ascii=False),
-            lang         = lang,
-            status       = "pending",
-            status_msg_id= status_msg_id,
-        )
-        session.add(item)
-        session.commit()
-        session.refresh(item)
-        item_id = item.id
-        session.close()
+        try:
+            item = QueueItem(
+                user_id      = user_id,
+                chat_id      = chat_id,
+                request_type = request_type,
+                params_json  = json.dumps(params, ensure_ascii=False),
+                lang         = lang,
+                status       = "pending",
+                status_msg_id= status_msg_id,
+            )
+            session.add(item)
+            session.commit()
+            session.refresh(item)
+            item_id = item.id
+        finally:
+            session.close()
         await self._queue.put(item_id)
         return item_id
 
     async def cancel(self, item_id: int, user_id: int) -> bool:
         """Cancel a pending item. Returns True if cancelled, False if already processing."""
         session = get_session()
-        item = session.query(QueueItem).filter_by(id=item_id, user_id=user_id).first()
-        if not item or item.status != "pending":
+        try:
+            item = session.query(QueueItem).filter_by(id=item_id, user_id=user_id).first()
+            if not item or item.status != "pending":
+                return False
+            item.status = "cancelled"
+            session.commit()
+            return True
+        finally:
             session.close()
-            return False
-        item.status = "cancelled"
-        session.commit()
-        session.close()
-        return True
 
     def position(self, item_id: int) -> int:
         """Return 1-based queue position of a pending item (0 = not found/done)."""
         session = get_session()
-        items = session.query(QueueItem).filter(
-            QueueItem.status == "pending"
-        ).order_by(QueueItem.id).all()
-        session.close()
-        for i, it in enumerate(items, 1):
-            if it.id == item_id:
-                return i
-        return 0
+        try:
+            items = session.query(QueueItem).filter(
+                QueueItem.status == "pending"
+            ).order_by(QueueItem.id).all()
+            for i, it in enumerate(items, 1):
+                if it.id == item_id:
+                    return i
+            return 0
+        finally:
+            session.close()
 
     async def _consume(self):
         while True:
@@ -158,47 +165,53 @@ class RequestQueue:
 
     async def _notify_processing(self, item_id: int):
         session = get_session()
-        item = session.query(QueueItem).filter_by(id=item_id).first()
-        if item and item.status_msg_id:
-            from .lang import t
-            try:
-                await self._bot.edit_message_text(
-                    chat_id    = item.chat_id,
-                    message_id = item.status_msg_id,
-                    text       = t("queue_processing", item.lang),
-                )
-            except Exception: pass
-        session.close()
+        try:
+            item = session.query(QueueItem).filter_by(id=item_id).first()
+            if item and item.status_msg_id:
+                from .lang import t
+                try:
+                    await self._bot.edit_message_text(
+                        chat_id    = item.chat_id,
+                        message_id = item.status_msg_id,
+                        text       = t("queue_processing", item.lang),
+                    )
+                except Exception: pass
+        finally:
+            session.close()
 
     async def _notify_error(self, item_id: int):
         session = get_session()
-        item = session.query(QueueItem).filter_by(id=item_id).first()
-        if item:
-            item.status = "done"
-            session.commit()
-            from .lang import t
-            try:
-                await self._bot.send_message(
-                    chat_id = item.chat_id,
-                    text    = t("error", item.lang),
-                )
-            except Exception: pass
-            if item.status_msg_id:
+        try:
+            item = session.query(QueueItem).filter_by(id=item_id).first()
+            if item:
+                item.status = "done"
+                session.commit()
+                from .lang import t
                 try:
-                    await self._bot.delete_message(
-                        chat_id    = item.chat_id,
-                        message_id = item.status_msg_id,
+                    await self._bot.send_message(
+                        chat_id = item.chat_id,
+                        text    = t("error", item.lang),
                     )
                 except Exception: pass
-        session.close()
+                if item.status_msg_id:
+                    try:
+                        await self._bot.delete_message(
+                            chat_id    = item.chat_id,
+                            message_id = item.status_msg_id,
+                        )
+                    except Exception: pass
+        finally:
+            session.close()
 
     async def _broadcast_positions(self):
         """Edit status messages for all pending items to show updated position."""
         from .lang import t
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         session = get_session()
-        pending = session.query(QueueItem).filter_by(status="pending").order_by(QueueItem.id).all()
-        session.close()
+        try:
+            pending = session.query(QueueItem).filter_by(status="pending").order_by(QueueItem.id).all()
+        finally:
+            session.close()
         for pos, item in enumerate(pending, 1):
             if not item.status_msg_id:
                 continue

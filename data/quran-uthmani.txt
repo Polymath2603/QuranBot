@@ -6240,7 +6240,7 @@
 #====================================================================
 #
 #  Tanzil Quran Text (Uthmani, Version 1.1)
-#  Copyright (C) 2007-2025 Tanzil Project
+#  Copyright (C) 2007-2026 Tanzil Project
 #  License: Creative Commons Attribution 3.0
 #
 #  This copy of the Quran text is carefully produced, highly 

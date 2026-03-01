@@ -12,12 +12,14 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from config import (
-    BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR, DEFAULT_VOICE, CHANNEL_URL,
-    HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT, VIDEO_DEFAULT_RATIO,
-    ADMIN_IDS, MAX_AYAS_PER_REQUEST,
+    BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR, DEFAULT_VOICE, CHANNEL_URL, CHANNEL_ID,
+    HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT, HTTP_WRITE_TIMEOUT,
+    HTTP_POOL_SIZE, HTTP_POOL_TIMEOUT, VIDEO_DEFAULT_RATIO,
+    ADMIN_IDS, MAX_AYAS_PER_REQUEST, CHAR_LIMIT
 )
 from core.data import (
-    load_quran_data, load_quran_text,
+    load_quran_data, load_quran_text, load_quran_text_simple,
+    strip_basmala, replace_basmala_symbol, replace_basmala_page,
     get_sura_name, get_sura_display_name,
     get_sura_aya_count, get_sura_start_index,
 )
@@ -30,25 +32,31 @@ from core.verses    import (
     build_verse_keyboard, send_text_single, send_text_range,
     send_paged_message, format_verse_file, send_file,
 )
-from core.database  import init_db, get_session, get_db_user, update_user_field, User
+from core.database  import (
+    init_db, get_session, get_db_user, update_user_field, User,
+    BotStats, get_stats, increment_stat,
+)
 from core.lang      import t
 from core.nlu       import parse_message
 from core.utils     import (
-    safe_filename, delete_status_msg,
+    safe_filename,
     check_and_purge_storage, is_rate_limited,
     get_file_id, set_file_id, file_id_count,
-    get_free_mb,
+    get_free_mb, make_progress_cb,
 )
 from core.queue     import request_queue, QueueItem
+from core.hadith    import get_random_hadith, format_hadith, get_total_count
 
 logging.basicConfig(format="%(asctime)s %(name)s %(levelname)s %(message)s", level=logging.WARNING)
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 _WORKER_POOL = ThreadPoolExecutor(max_workers=2)
 
-quran_data = None
-verses     = None
+quran_data    = None
+verses        = None   # Uthmani text — for video rendering only
+simple_verses = None   # Simple text — for display, search, subtitles
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +278,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     voice = query.data[len("voice_"):]
     user  = get_db_user(update.effective_user)
     update_user_field(user.telegram_id, voice=voice)
-    await main_menu(update, context)
+    await settings_handler(update, context)
 
 
 # ---------------------------------------------------------------------------
@@ -302,15 +310,17 @@ async def donate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_db_user(update.effective_user)
     lang = user.language
     keyboard = [
-        [InlineKeyboardButton(t("stars_50",  lang), callback_data="stars_50"),
-         InlineKeyboardButton(t("stars_100", lang), callback_data="stars_100")],
-        [InlineKeyboardButton(t("stars_500", lang), callback_data="stars_500")],
+        [InlineKeyboardButton(t("stars_25",  lang), callback_data="stars_25"),
+         InlineKeyboardButton(t("stars_50",  lang), callback_data="stars_50")],
+        [InlineKeyboardButton(t("stars_100", lang), callback_data="stars_100"),
+         InlineKeyboardButton(t("stars_500", lang), callback_data="stars_500")],
         [InlineKeyboardButton(t("back",      lang), callback_data="menu_main")],
     ]
     await query.edit_message_text(
-        t("donate_title", lang) + t("donate_manual", lang),
+        t("donate_title", lang) + "\n\n" + t("donate_manual", lang),
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
+        disable_web_page_preview=True,
     )
 
 
@@ -321,6 +331,7 @@ async def stars_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_db_user(update.effective_user)
     try:   amount = int(query.data.split("_")[1])
     except: return
+    if amount not in (25, 50, 100, 500): return
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
         title=t("donate_desc", user.language),
@@ -339,22 +350,13 @@ async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_db_user(update.effective_user)
+    increment_stat('stars_donations')
     await update.message.reply_text(t("donate_thanks", user.language))
 
 
 # ---------------------------------------------------------------------------
 # Queue processor (runs in worker thread, called by RequestQueue consumer)
 # ---------------------------------------------------------------------------
-
-# Progress step → locale key
-_PROGRESS_KEYS = {
-    0:   "progress_rendering",
-    20:  "progress_encoding",
-    60:  "progress_concat",
-    70:  "progress_compositing",
-    100: "progress_uploading",
-}
-
 
 async def _process_queue_item(bot, item_id: int):
     """Called by the queue consumer for each item."""
@@ -365,22 +367,27 @@ async def _process_queue_item(bot, item_id: int):
     params   = item.params()
     lang     = item.lang
     chat_id  = item.chat_id
+    msg_id   = item.status_msg_id   # position message sent by handler
     req_type = item.request_type
     session.close()
 
-    loop    = asyncio.get_event_loop()
-    last_pct = [-1]
+    loop     = asyncio.get_running_loop()
 
-    def _make_progress_cb(edit_fn):
-        STEPS = [0, 20, 40, 60, 80, 100]
-        def _cb(pct: int, _msg: str = ""):
-            step = max((s for s in STEPS if s <= pct), default=0)
-            if step == last_pct[0]: return
-            last_pct[0] = step
-            bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
-            text = f"🎬\n{bar} {step}%"
-            asyncio.run_coroutine_threadsafe(edit_fn(text), loop)
-        return _cb
+    async def _dot_delete():
+        """Edit position msg to '.' then delete it — clean visual dismissal."""
+        if not msg_id: return
+        try: await bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=".")
+        except Exception: pass
+        await asyncio.sleep(0.3)
+        try: await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception: pass
+
+    async def _edit_pos(text, reply_markup=None):
+        if not msg_id: return
+        try: await bot.edit_message_text(
+            chat_id=chat_id, message_id=msg_id, text=text, reply_markup=reply_markup
+        )
+        except Exception: pass
 
     if req_type == "audio":
         reciter_code = params["reciter_code"]
@@ -395,38 +402,20 @@ async def _process_queue_item(bot, item_id: int):
         if cached:
             await bot.send_audio(chat_id=chat_id, audio=cached,
                                  caption=t("audio_caption", lang, title=title, reciter=reciter))
+            await _dot_delete()
         else:
-            prog_msg = await bot.send_message(chat_id=chat_id, text="🎧\n▱▱▱▱▱ 0%")
-            prog_id  = prog_msg.message_id
+            await _edit_pos("🎧\n▱▱▱▱▱ 0%")
 
             async def _edit_audio(text):
-                try: await bot.edit_message_text(chat_id=chat_id, message_id=prog_id, text=text)
-                except Exception: pass
-
-            async def _delete_audio():
-                try: await bot.delete_message(chat_id=chat_id, message_id=prog_id)
-                except Exception: pass
-
-            def _audio_progress_cb():
-                last = [-1]
-                STEPS = [0, 20, 40, 60, 80, 100]
-                def _cb(pct: int):
-                    step = max((s for s in STEPS if s <= pct), default=0)
-                    if step == last[0]: return
-                    last[0] = step
-                    bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
-                    asyncio.run_coroutine_threadsafe(
-                        _edit_audio(f"🎧\n{bar} {step}%"), loop
-                    )
-                return _cb
+                await _edit_pos(text)
 
             def _gen():
                 check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
                 return gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
                                sura, start_aya, sura, end_aya, title=title, artist=reciter,
-                               progress_cb=_audio_progress_cb())
+                               progress_cb=make_progress_cb(_edit_audio, loop, icon="🎧"))
             mp3_path = await loop.run_in_executor(_WORKER_POOL, _gen)
-            await _delete_audio()
+            await _dot_delete()
             with open(mp3_path, "rb") as f:
                 sent = await bot.send_audio(
                     chat_id=chat_id, audio=f,
@@ -435,6 +424,7 @@ async def _process_queue_item(bot, item_id: int):
                 )
             if sent and sent.audio:
                 set_file_id(fid_key, sent.audio.file_id)
+                increment_stat('generated_audio')
 
     elif req_type == "video":
         reciter_code = params["reciter_code"]
@@ -451,36 +441,34 @@ async def _process_queue_item(bot, item_id: int):
         if cached:
             await bot.send_video(chat_id=chat_id, video=cached,
                                  caption=t("video_caption", lang, title=title, reciter=reciter))
+            await _dot_delete()
         else:
-            prog_msg = await bot.send_message(chat_id=chat_id, text="🎬\n▱▱▱▱▱ 0%")
-            prog_id  = prog_msg.message_id
+            await _edit_pos("🎬\n▱▱▱▱▱ 0%")
 
             async def _edit_video(text):
-                try: await bot.edit_message_text(chat_id=chat_id, message_id=prog_id, text=text)
-                except Exception: pass
-
-            async def _delete_video():
-                try: await bot.delete_message(chat_id=chat_id, message_id=prog_id)
-                except Exception: pass
+                await _edit_pos(text)
 
             def _gen():
                 check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
                 mp3 = gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
                               sura, start_aya, sura, end_aya, title=title, artist=reciter)
                 start_index = get_sura_start_index(quran_data, sura)
-                vtexts      = [verses[start_index + i - 1] for i in range(start_aya, end_aya + 1)]
+                vtexts      = [
+                    strip_basmala(verses[start_index + i - 1], sura, i)
+                    for i in range(start_aya, end_aya + 1)
+                ]
                 vdurs       = get_verse_durations(DATA_DIR / "audio", reciter_code, sura, start_aya, end_aya)
                 return gen_video(
-                    vtexts, start_aya, title, sura, start_aya, end_aya,
+                    vtexts, start_aya, title, sura,
                     voice=reciter_code, audio_path=mp3,
                     output_dir=OUTPUT_DIR / reciter_code,
                     ratio=ratio,
                     verse_durations=vdurs,
-                    progress_cb=_make_progress_cb(_edit_video),
+                    progress_cb=make_progress_cb(_edit_video, loop, icon="🎬"),
                 )
 
             video_path = await loop.run_in_executor(_WORKER_POOL, _gen)
-            await _delete_video()
+            await _dot_delete()
             with open(video_path, "rb") as vf:
                 sent = await bot.send_video(
                     chat_id=chat_id, video=vf,
@@ -489,6 +477,7 @@ async def _process_queue_item(bot, item_id: int):
                 )
             if sent and sent.video:
                 set_file_id(fid_key, sent.video.file_id)
+                increment_stat('generated_video')
 
     # Mark done
     session = get_session()
@@ -544,14 +533,25 @@ async def play_audio_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-    await request_queue.enqueue(
+    pos_msg  = await query.message.reply_text("⏳ 1")
+    item_id  = await request_queue.enqueue(
         context.bot, user.telegram_id, update.effective_chat.id,
         "audio",
         {"reciter_code": reciter_code, "sura": sura, "start_aya": start_aya,
          "end_aya": end_aya, "title": title, "reciter": reciter},
         lang,
-        status_msg_id=None,
+        status_msg_id=pos_msg.message_id,
     )
+    pos = request_queue.position(item_id)
+    if pos > 1:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+            t("queue_cancel_btn", lang), callback_data=f"queue_cancel_{item_id}"
+        )]])
+        try: await pos_msg.edit_text(t("queue_position", lang, pos=pos), reply_markup=kb)
+        except Exception: pass
+    else:
+        try: await pos_msg.edit_text(t("queue_processing", lang))
+        except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -602,14 +602,25 @@ async def video_generate_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    await request_queue.enqueue(
+    pos_msg  = await query.message.reply_text("⏳ 1")
+    item_id  = await request_queue.enqueue(
         context.bot, user.telegram_id, update.effective_chat.id,
         "video",
         {"reciter_code": reciter_code, "sura": sura, "start_aya": start_aya, "end_aya": end_aya,
          "title": title, "reciter": reciter, "ratio": ratio},
         lang,
-        status_msg_id=None,
+        status_msg_id=pos_msg.message_id,
     )
+    pos = request_queue.position(item_id)
+    if pos > 1:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+            t("queue_cancel_btn", lang), callback_data=f"queue_cancel_{item_id}"
+        )]])
+        try: await pos_msg.edit_text(t("queue_position", lang, pos=pos), reply_markup=kb)
+        except Exception: pass
+    else:
+        try: await pos_msg.edit_text(t("queue_processing", lang))
+        except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -661,9 +672,9 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     if start == end:
-        await send_text_single(query, sura, start, user, lang, verses, quran_data, durations=durs)
+        await send_text_single(query, sura, start, user, lang, simple_verses, quran_data, durations=durs)
     else:
-        await send_text_range(query, sura, start, end, char_offset, user, lang, verses, quran_data, durations=durs)
+        await send_text_range(query, sura, start, end, char_offset, user, lang, simple_verses, quran_data, durations=durs)
 
 
 # ---------------------------------------------------------------------------
@@ -675,46 +686,53 @@ async def tafsir_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try: await query.answer()
     except Exception: pass
     try:
-        p = query.data.split("_")
+        p        = query.data.split("_")
         sura, start = int(p[1]), int(p[2])
-        end          = int(p[3]) if len(p) > 3 else start
-        char_offset  = int(p[4]) if len(p) > 4 else 0   # char offset into the full text block
+        end      = int(p[3]) if len(p) > 3 else start
+        from_aya = int(p[4]) if len(p) > 4 else start   # first aya of this page
+        prev_aya = int(p[5]) if len(p) > 5 else start   # first aya of previous page
     except (IndexError, ValueError): return
 
     user      = get_db_user(update.effective_user)
     lang      = user.language
+    source    = user.tafsir_source
     sura_name = get_sura_display_name(quran_data, sura, lang)
     not_found = t("tafsir_not_found", lang)
-    MAX_CHARS = 3800
 
-    # Build the full tafsir text once
+    # Lazy fetch: only load ayas needed to fill this page.
+    # For single-aya tafsir, from_aya == start == end; fetch one aya only.
     if start == end:
-        body = get_tafsir(sura, start, user.tafsir_source) or not_found
-        full_text = f"📖 {sura_name} ({start}) — {t('tafsir', lang)}\n\n{body}"
+        body = await asyncio.to_thread(get_tafsir, sura, start, source) or not_found
+        # Single-aya tafsir can be long — hard-truncate to CHAR_LIMIT minus header
+        header    = f"📖 {sura_name} ({start}) — {t('tafsir', lang)}\n\n"
+        max_body  = CHAR_LIMIT - len(header)
+        page_text = header + body[:max_body]
+        next_aya  = None
     else:
-        lines = [f"📖 {sura_name} ({start}-{end}) — {t('tafsir', lang)}\n"]
-        for aya in range(start, end + 1):
-            lines.append(f"﴿{aya}﴾ {get_tafsir(sura, aya, user.tafsir_source) or not_found}")
-        full_text = "\n\n".join(lines)
-
-    # Slice by char_offset, never cut in the middle of an aya block
-    page_text = full_text[char_offset:char_offset + MAX_CHARS]
-    # Trim to last newline so we don't cut mid-aya
-    next_offset = char_offset + MAX_CHARS
-    if next_offset < len(full_text):
-        cut = page_text.rfind("\n\n")
-        if cut > 0:
-            page_text  = page_text[:cut]
-            next_offset = char_offset + cut + 2
-        else:
-            next_offset = char_offset + MAX_CHARS
+        header   = f"📖 {sura_name} ({start}-{end}) — {t('tafsir', lang)}\n"
+        blocks   = []
+        char_acc = len(header)
+        next_aya = None
+        for aya in range(from_aya, end + 1):
+            text  = await asyncio.to_thread(get_tafsir, sura, aya, source) or not_found
+            block = f"﴿{aya}﴾ {text}"
+            sep   = "\n\n" if blocks else ""
+            # Always add at least one block per page so we always advance.
+            # After the first block, stop before adding one that would overflow.
+            if blocks and char_acc + len(sep) + len(block) > CHAR_LIMIT:
+                next_aya = aya
+                break
+            blocks.append(block)
+            char_acc += len(sep) + len(block)
+        page_text = header + "\n\n".join(blocks)
 
     nav = []
-    if char_offset > 0:
-        prev_off = max(0, char_offset - MAX_CHARS)
-        nav.append(InlineKeyboardButton("◀️", callback_data=f"tafpage_{sura}_{start}_{end}_{prev_off}"))
-    if next_offset < len(full_text):
-        nav.append(InlineKeyboardButton("▶️", callback_data=f"tafpage_{sura}_{start}_{end}_{next_offset}"))
+    if from_aya > start:
+        nav.append(InlineKeyboardButton("◀️",
+            callback_data=f"tafpage_{sura}_{start}_{end}_{prev_aya}_{start}"))
+    if next_aya is not None:
+        nav.append(InlineKeyboardButton("▶️",
+            callback_data=f"tafpage_{sura}_{start}_{end}_{next_aya}_{from_aya}"))
     keyboard = ([nav] if nav else []) + [[InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{start}_{end}")]]
 
     await query.edit_message_text(page_text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -774,7 +792,10 @@ async def page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, page_
         if cur_aya == 1:
             response += "\n" + t("page_sura_header", lang, sura_name=get_sura_name(quran_data, cur_sura, lang)) + "\n"
         s_idx     = get_sura_start_index(quran_data, cur_sura)
-        response += f"{verses[s_idx + cur_aya - 1]} ({cur_aya}) "
+        raw_verse = simple_verses[s_idx + cur_aya - 1]
+        if cur_aya == 1 and cur_sura != 1:
+            raw_verse = replace_basmala_page(raw_verse, cur_sura, cur_aya)
+        response += f"{raw_verse} ({cur_aya}) "
         if cur_sura == end_sura and cur_aya == end_aya: break
         cur_aya += 1
         if cur_aya > get_sura_aya_count(quran_data, cur_sura):
@@ -794,7 +815,7 @@ async def page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, page_
 # Search helpers
 # ---------------------------------------------------------------------------
 
-MAX_SEARCH_PAGE_CHARS = 3500
+CHAR_LIMIT = CHAR_LIMIT
 
 async def _send_search_results(message, results: list, query_text: str, lang: str, page_offset: int):
     """
@@ -814,8 +835,9 @@ async def _send_search_results(message, results: list, query_text: str, lang: st
     while i < len(results):
         r     = results[i]
         sname = get_sura_display_name(quran_data, r["sura"], lang)
-        line  = f"\n﴿{r['text']}﴾\n— {sname} ({r['aya']})"
-        if char_count + len(line) > MAX_SEARCH_PAGE_CHARS and buttons_for_page:
+        rtxt  = replace_basmala_symbol(r['text'], r['sura'], r['aya'])
+        line  = f"\n﴿{rtxt}﴾\n— {sname} ({r['aya']})"
+        if char_count + len(line) > CHAR_LIMIT and buttons_for_page:
             break  # page full, stop here
         text_parts.append(line)
         char_count += len(line)
@@ -882,7 +904,7 @@ async def message_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif intent["type"] == "page":
         await page_handler(update, context, intent["page"])
     elif intent["type"] == "search":
-        results = search(quran_data, verses, update.message.text)
+        results = search(quran_data, simple_verses, update.message.text)
         if not results:
             await update.message.reply_text(t("no_results", lang)); return
         await _send_search_results(update.message, results, update.message.text, lang, 0)
@@ -907,11 +929,16 @@ async def search_result_handler(update: Update, context: ContextTypes.DEFAULT_TY
     fmt   = user.get_preference("text_format", "msg")
     name  = get_sura_display_name(quran_data, sura, lang)
     idx   = get_sura_start_index(quran_data, sura)
-    text  = verses[idx + aya - 1]
+    text  = simple_verses[idx + aya - 1]
     title = f"📖 {name} ({aya})"
-    response = f"{title}\n\n﴿ {text} ({aya}) ﴾"
+    text     = replace_basmala_symbol(text, sura, aya)
+    if text.startswith("﷽"):
+        inner    = text[1:].lstrip()
+        response = f"{title}\n\n﷽ ﴿ {inner} ({aya}) ﴾"
+    else:
+        response = f"{title}\n\n﴿ {text} ({aya}) ﴾"
     kb = build_verse_keyboard(sura, aya, aya, lang, fmt, quran_data)
-    if len(response) <= 4000:
+    if len(response) <= CHAR_LIMIT:
         await query.edit_message_text(response, reply_markup=kb)
     else:
         await send_paged_message(query.message, response, reply_markup=kb)
@@ -930,11 +957,10 @@ async def search_page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user    = get_db_user(update.effective_user)
     lang    = user.language
-    results = search(quran_data, verses, query_text)
+    results = search(quran_data, simple_verses, query_text)
     if not results:
         await query.answer(t("no_results", lang), show_alert=True); return
-    # Edit current message with new page
-    await query.message.delete()
+    # Send new page as a new message — do NOT delete first (broken reply_to reference)
     await _send_search_results(query.message, results, query_text, lang, page_offset)
 
 
@@ -944,7 +970,10 @@ async def search_page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_db_user(update.effective_user)
-    await update.message.reply_text(t("help_text", user.language), parse_mode="Markdown")
+    await update.message.reply_text(
+        t("help_text", user.language, channel=CHANNEL_URL or ""),
+        parse_mode="Markdown",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -977,7 +1006,7 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user.language
     uid  = update.effective_user.id
 
-    if ADMIN_IDS and uid not in ADMIN_IDS:
+    if not ADMIN_IDS or uid not in ADMIN_IDS:
         await update.message.reply_text(t("admin_not_allowed", lang))
         return
 
@@ -1016,6 +1045,18 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Count cached output files on disk
     cached_files = sum(1 for _ in OUTPUT_DIR.rglob("*") if _.is_file() and _.suffix in (".mp3", ".mp4"))
 
+    # Lifetime stats
+    stats_session = get_session()
+    try:
+        bstats = get_stats(stats_session)
+        gen_audio       = bstats.generated_audio     or 0
+        gen_video       = bstats.generated_video     or 0
+        had_personal    = bstats.hadiths_sent_personal  or 0
+        had_channel     = bstats.hadiths_sent_channel   or 0
+        stars_donated   = bstats.stars_donations     or 0
+    finally:
+        stats_session.close()
+
     lines = [
         t("admin_title", lang),
         "",
@@ -1027,6 +1068,13 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(t("admin_processing", lang, count=processing_q))
     lines += [
         f"  ✅ {t('done', lang)}: {done_q}",
+        "",
+        t("admin_gen_audio",   lang, count=gen_audio),
+        t("admin_gen_video",   lang, count=gen_video),
+        t("admin_had_personal",lang, count=had_personal),
+        t("admin_had_channel", lang, count=had_channel),
+        t("admin_stars_donated",lang, count=stars_donated),
+        "",
         t("admin_disk",   lang, free_mb=round(free_mb, 1)),
         t("admin_cache",  lang, count=cache_size),
         t("admin_cached_files", lang, count=cached_files),
@@ -1040,6 +1088,60 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"  • {vname}: {cnt}")
 
     await update.message.reply_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# /hadith  — send a random hadith to the requesting user
+# /chadith — admin: send a random hadith to the channel
+# ---------------------------------------------------------------------------
+
+async def hadith_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a random Arabic hadith to the user."""
+    user = get_db_user(update.effective_user)
+    lang = user.language
+    await update.message.chat.send_action("typing")
+    entry = get_random_hadith()
+    if not entry:
+        await update.message.reply_text(t("hadith_not_found", lang))
+        return
+    text = format_hadith(entry)
+    if not text:
+        await update.message.reply_text(t("hadith_not_found", lang))
+        return
+    await update.message.reply_text(text)
+    increment_stat("hadiths_sent_personal")
+
+
+async def chadith_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin: push a random Arabic hadith to the channel."""
+    user = get_db_user(update.effective_user)
+    lang = user.language
+    uid  = update.effective_user.id
+
+    if not ADMIN_IDS or uid not in ADMIN_IDS:
+        await update.message.reply_text(t("admin_not_allowed", lang))
+        return
+
+    if not CHANNEL_ID:
+        await update.message.reply_text(t("chadith_no_channel", lang))
+        return
+
+    await update.message.chat.send_action("typing")
+    entry = get_random_hadith()
+    if not entry:
+        await update.message.reply_text(t("hadith_not_found", lang))
+        return
+    text = format_hadith(entry)
+    if not text:
+        await update.message.reply_text(t("hadith_not_found", lang))
+        return
+
+    try:
+        await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        await update.message.reply_text(t("chadith_sent", lang))
+        increment_stat("hadiths_sent_channel")
+    except Exception as e:
+        await update.message.reply_text(t("chadith_error", lang, error=str(e)))
 
 
 # ---------------------------------------------------------------------------
@@ -1110,16 +1212,24 @@ async def _post_init(app):
 
 
 def main():
-    global quran_data, verses
+    global quran_data, verses, simple_verses
     init_db()
     print("Loading Quran data…")
-    quran_data = load_quran_data(DATA_DIR)
-    verses     = load_quran_text(DATA_DIR)
-    print(f"Loaded {len(verses)} verses")
+    quran_data    = load_quran_data(DATA_DIR)
+    verses        = load_quran_text(DATA_DIR)
+    simple_verses = load_quran_text_simple(DATA_DIR)
+    print(f"Loaded Uthmani text ({len(verses)} verses).")
+    print(f"Loaded Simple text ({len(simple_verses)} verses).")
     if not BOT_TOKEN:
-        print("ERROR: TELEGRAM_BOT_TOKEN not set."); return
+        print("ERROR: BOT_TOKEN not set."); return
 
-    request = HTTPXRequest(connect_timeout=HTTP_CONNECT_TIMEOUT, read_timeout=HTTP_READ_TIMEOUT)
+    request = HTTPXRequest(
+        connection_pool_size = HTTP_POOL_SIZE,
+        connect_timeout      = HTTP_CONNECT_TIMEOUT,
+        read_timeout         = HTTP_READ_TIMEOUT,
+        write_timeout        = HTTP_WRITE_TIMEOUT,
+        pool_timeout         = HTTP_POOL_TIMEOUT,
+    )
     app     = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -1128,10 +1238,12 @@ def main():
         .build()
     )
     app.add_error_handler(error_handler)
-    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start",    start))
     app.add_handler(CommandHandler("help",     help_handler))
     app.add_handler(CommandHandler("feedback", feedback_handler))
     app.add_handler(CommandHandler("admin",    admin_handler))
+    app.add_handler(CommandHandler("hadith",   hadith_handler))
+    app.add_handler(CommandHandler("chadith",  chadith_handler))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
     app.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))

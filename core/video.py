@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 from config import (
     VIDEO_FPS, VIDEO_FADE_DURATION, VIDEO_SYNC_OFFSET,
     VIDEO_FONT_SIZE, VIDEO_MIN_FONT_SIZE,
-    VIDEO_PADDING, VIDEO_FALLBACK_DUR, FONT_PATH,
+    VIDEO_PADDING, FONT_PATH,
     VIDEO_SIZES, VIDEO_DEFAULT_RATIO,
 )
 
@@ -174,16 +174,27 @@ def _to_arabic_numerals(n: int) -> str:
     ar = "٠١٢٣٤٥٦٧٨٩"
     return "".join(ar[int(d)] for d in str(n))
 
+def _clean_verse(text: str) -> str:
+    """Remove Quranic annotation marks that the display font cannot render.
+
+    Strips U+06D6–U+06ED: small high/low signs, pause marks (ۚ ۖ ۗ ۘ ۙ),
+    sajda mark, small waw ۥ, small ya ۦ, and similar marks.
+    These appear in Uthmani text and cause rendering artefacts with KFGQPC font.
+    Also removes the dagger alif U+0670 for the same reason.
+    """
+    import re as _re
+    text = _re.sub(r'\u0670', '', text)          # dagger alif
+    text = _re.sub(r'[\u06D6-\u06ED]', '', text)  # Quranic annotation marks
+    return text
+
+
 def _build_entries(verses_list, start_aya, verse_durations):
     entries, t = [], 0.0
     for i, verse in enumerate(verses_list):
-        dur = (
-            verse_durations[i]
-            if verse_durations and i < len(verse_durations) and verse_durations[i] > 0
-            else VIDEO_FALLBACK_DUR
-        )
+        dur     = verse_durations[i]
         aya_num = _to_arabic_numerals(start_aya + i)
-        entries.append({"text": f"{verse} {aya_num}", "start": t, "end": t + dur})
+        cleaned = _clean_verse(verse)
+        entries.append({"text": f"{cleaned} {aya_num}", "start": t, "end": t + dur})
         t += dur
     return entries
 
@@ -229,8 +240,6 @@ def gen_video(
     start_aya: int,
     title: str,
     sura: int,
-    range_start: int,
-    range_end: int,
     voice: str            = "",
     audio_path            = None,
     output_dir: Path      = None,
@@ -244,6 +253,8 @@ def gen_video(
     Ratio controls output dimensions (landscape/portrait).
     Returns the path to the output .mp4 (cached if already exists).
     """
+    range_start = start_aya
+    range_end   = start_aya + len(verses_list) - 1
 
     def _progress(pct, msg=""):
         if progress_cb:

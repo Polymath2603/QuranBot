@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from io import BytesIO
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from .data import get_sura_display_name, get_sura_start_index
+from .data import get_sura_display_name, get_sura_start_index, strip_basmala, replace_basmala_symbol
 from .lang import t
 from .search import get_page
 from .subtitles import build_srt, build_lrc
 from .utils import safe_filename
+from config import CHAR_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,13 @@ async def send_file(message, content: str, fmt: str, base_name: str, lang: str =
 
 
 async def send_paged_message(message, text: str, reply_markup=None) -> None:
-    if len(text) <= 4000:
+    if len(text) <= CHAR_LIMIT:
         await message.reply_text(text, reply_markup=reply_markup); return
     parts, current_msg = text.split("﴾"), ""
     for part in parts:
         if not part.strip(): continue
         chunk = part + "﴾"
-        if len(current_msg + chunk) < 4000: current_msg += chunk
+        if len(current_msg + chunk) < CHAR_LIMIT: current_msg += chunk
         else:
             if current_msg: await message.reply_text(current_msg)
             current_msg = chunk
@@ -67,17 +68,24 @@ async def send_text_single(query, sura, aya, user, lang, verses, quran_data, dur
     title      = f"{sura_name} ({aya})"
 
     if fmt in ("srt", "lrc"):
-        content = format_verse_file(fmt, [(aya, verse_text)], durations=durations,
+        # Strip basmala from subtitle files
+        stripped_text = strip_basmala(verse_text, sura, aya)
+        content = format_verse_file(fmt, [(aya, stripped_text)], durations=durations,
                                     title=title, artist="")
         await send_file(query.message, content, fmt, safe_filename(title), lang)
         return
 
-    # msg format: ﴿ verse_text (aya) ﴾
-    response = f"📖 {title}\n\n﴿ {verse_text} ({aya}) ﴾"
+    # msg format: place ﷽ before ﴿...﴾ if basmala is present
+    display_text = replace_basmala_symbol(verse_text, sura, aya)
+    if display_text.startswith("﷽"):
+        inner    = display_text[1:].lstrip()
+        response = f"📖 {title}\n\n﷽ ﴿ {inner} ({aya}) ﴾"
+    else:
+        response = f"📖 {title}\n\n﴿ {display_text} ({aya}) ﴾"
     back_kb  = InlineKeyboardMarkup([[InlineKeyboardButton(
         t("back", lang), callback_data=f"verse_back_{sura}_{aya}_{aya}"
     )]])
-    if len(response) <= 4000:
+    if len(response) <= CHAR_LIMIT:
         await query.edit_message_text(response, reply_markup=back_kb)
     else:
         await send_paged_message(query.message, response, reply_markup=back_kb)
@@ -94,21 +102,30 @@ async def send_text_range(query, sura, start, end, char_offset, user, lang, vers
     idx       = get_sura_start_index(quran_data, sura)
     title     = f"{sura_name} ({start}-{end})"
 
-    verse_pairs = [(i, verses[idx + i - 1]) for i in range(start, end + 1)]
+    raw_pairs   = [(i, verses[idx + i - 1]) for i in range(start, end + 1)]
 
     if fmt in ("srt", "lrc"):
-        content = format_verse_file(fmt, verse_pairs, durations=durations, title=title, artist="")
+        # Strip basmala for subtitle files
+        strip_pairs = [(i, strip_basmala(v, sura, i)) for i, v in raw_pairs]
+        content = format_verse_file(fmt, strip_pairs, durations=durations, title=title, artist="")
         await send_file(query.message, content, fmt, safe_filename(title), lang)
         return
 
+    # Apply ﷽ symbol for message display
+    verse_pairs = [(i, replace_basmala_symbol(v, sura, i)) for i, v in raw_pairs]
+
     # Build continuous body: verse (number) separated by spaces
-    MAX_CHARS = 3500
     full_body = " ".join(f"{verse_text} ({i})" for i, verse_text in verse_pairs)
-    header    = f"📖 {title}\n\n﴿ "
+
+    # Detect leading ﷽ (aya 1 basmala). Strip it from the body; header carries it on page 1.
+    leading_basmala = full_body.startswith("﷽")
+    if leading_basmala:
+        full_body = full_body[1:].lstrip()
+
     footer    = " ﴾"
 
-    body_slice  = full_body[char_offset:char_offset + MAX_CHARS]
-    next_offset = char_offset + MAX_CHARS
+    body_slice  = full_body[char_offset:char_offset + CHAR_LIMIT]
+    next_offset = char_offset + CHAR_LIMIT
     if next_offset < len(full_body):
         # Trim to last complete aya (ends with a closing parenthesis)
         cut = body_slice.rfind(")")
@@ -119,11 +136,17 @@ async def send_text_range(query, sura, start, end, char_offset, user, lang, vers
         while next_offset < len(full_body) and full_body[next_offset] == " ":
             next_offset += 1
 
+    # Header: show ﷽ before bracket only on the first page
+    if char_offset == 0 and leading_basmala:
+        header = f"📖 {title}\n\n﷽ ﴿ "
+    else:
+        header = f"📖 {title}\n\n﴿ "
+
     shown_text = header + body_slice + footer
 
     nav = []
     if char_offset > 0:
-        prev_off = max(0, char_offset - MAX_CHARS)
+        prev_off = max(0, char_offset - CHAR_LIMIT)
         nav.append(InlineKeyboardButton("◀️", callback_data=f"textpage_{sura}_{start}_{end}_{prev_off}"))
     if next_offset < len(full_body):
         nav.append(InlineKeyboardButton("▶️", callback_data=f"textpage_{sura}_{start}_{end}_{next_offset}"))
@@ -132,7 +155,7 @@ async def send_text_range(query, sura, start, end, char_offset, user, lang, vers
         [[InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{start}_{end}")]]
     )
 
-    if len(shown_text) <= 4000:
+    if len(shown_text) <= CHAR_LIMIT:
         await query.edit_message_text(shown_text, reply_markup=kb)
     else:
         await send_paged_message(query.message, shown_text, reply_markup=kb)

@@ -1,7 +1,6 @@
-"""subtitles.py — SRT / LRC / TXT generation with real per-verse timestamps."""
+"""subtitles.py — SRT / LRC generation with real per-verse timestamps."""
 import json, logging, subprocess
 from pathlib import Path
-from config import VIDEO_FALLBACK_DUR
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ def _lrc_ts(s: float) -> str:
     return f"[{m:02d}:{sec:02d}.{cs:02d}]"
 
 def _dur(durations, idx) -> float:
-    return durations[idx] if durations and idx < len(durations) and durations[idx] > 0 else VIDEO_FALLBACK_DUR
+    return durations[idx] # if durations and idx < len(durations) and durations[idx] > 0 else VIDEO_FALLBACK_DUR
 
 def build_srt(verse_pairs: list[tuple[int, str]], durations: list[float] | None = None) -> str:
     lines, t = [], 0.0
@@ -57,5 +56,5 @@ def build_lrc(verse_pairs, durations=None, title="", artist="") -> str:
         t += d
     return "\n".join(lines)
 
-def build_txt(verse_pairs: list[tuple[int, str]]) -> str:
-    return " ".join(f"{text} ({num})" for num, text in verse_pairs)
+
+

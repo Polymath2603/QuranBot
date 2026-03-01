@@ -11,33 +11,40 @@ LOCALE_DIR = BASE_DIR / "locales"
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
 CHANNEL_URL = os.getenv("CHANNEL_URL", "")
-AUDIO_API   = "https://everyayah.com/data"
-QURAN_API   = "https://api.alquran.cloud/v1"
+CHANNEL_ID  = os.getenv("CHANNEL_ID", "")
+
+AUDIO_API = "https://everyayah.com/data"
+QURAN_API = "https://api.alquran.cloud/v1"
+
+CHAR_LIMIT  = 800
+
 # ---------------------------------------------------------------------------
 # Timeouts
 # ---------------------------------------------------------------------------
 HTTP_CONNECT_TIMEOUT = 20
 HTTP_READ_TIMEOUT    = 90
+HTTP_WRITE_TIMEOUT   = 90   # sending large audio/video files
+HTTP_POOL_SIZE       = 8    # keep small on phone/low-RAM server
+HTTP_POOL_TIMEOUT    = 30   # seconds to wait for a free connection
 DOWNLOAD_TIMEOUT     = 30
 
 # ---------------------------------------------------------------------------
 # Video
 # ---------------------------------------------------------------------------
-VIDEO_FPS           = 23
+VIDEO_FPS           = 24
 VIDEO_FADE_DURATION = 1          # seconds between verse transitions
-VIDEO_SYNC_OFFSET   = -0.3       # fixed seconds to shift text track forward relative to audio
+VIDEO_SYNC_OFFSET   = -0.5       # fixed seconds to shift text track forward relative to audio
 VIDEO_FONT_SIZE     = 36         # starting font size, auto-shrinks to fit
 VIDEO_MIN_FONT_SIZE = 26
-VIDEO_PADDING       = 38         # px padding inside frame
-VIDEO_FALLBACK_DUR  = 5.0        # seconds/verse fallback when MP3 not cached
+VIDEO_PADDING       = 40         # px padding inside frame
 FONT_PATH           = str(DATA_DIR / "KFGQPC Uthmanic Script HAFS.otf.ttf")
 
 # Portrait 9:16 and landscape 16:9 — kept small for fast encode
 VIDEO_SIZES = {
-    "portrait":  (720, 1280),
-    "landscape": (1280, 720),
+    "portrait":  (630, 1120),
+    "landscape": (1120, 630),
 }
-VIDEO_DEFAULT_RATIO = "landscape"
+VIDEO_DEFAULT_RATIO = "portrait"
 
 # ---------------------------------------------------------------------------
 # Storage / rate limiting
@@ -51,7 +58,7 @@ RATE_MAX_REQUESTS   = 10
 # Admin & request limits
 # ---------------------------------------------------------------------------
 # Telegram user IDs allowed to use /admin — add yours here
-ADMIN_IDS: list = [ int(id.strip()) for id in os.getenv("ADMIN_IDS", "").split(",") ]
+ADMIN_IDS: list = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 # Max ayas allowed per single audio/video request
 MAX_AYAS_PER_REQUEST = 40
 

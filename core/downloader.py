@@ -23,10 +23,4 @@ def download_audio(voice: str, sura: int, aya: int) -> Path | None:
                 path.unlink()
     return None
 
-def download_sura(quran_data: dict, voice: str, sura_num: int) -> list[Path] | None:
-    files = []
-    for aya in range(1, int(quran_data["Sura"][sura_num][1]) + 1):
-        p = download_audio(voice, sura_num, aya)
-        if p: files.append(p)
-        else: return None
-    return files
+

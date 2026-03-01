@@ -114,3 +114,25 @@ def file_id_count() -> int:
     return len(_file_ids)
 
 _load_file_ids()
+
+
+# ---------------------------------------------------------------------------
+# Shared progress-bar builder (B-16)
+# Used by both audio and video paths in bot.py/_process_queue_item
+# ---------------------------------------------------------------------------
+import asyncio as _asyncio
+
+def make_progress_cb(edit_coro_fn, loop, icon: str = "🎬"):
+    """
+    Return a progress callback suitable for gen_mp3 / gen_video.
+    Edits a Telegram message from a worker thread via run_coroutine_threadsafe.
+    """
+    last = [-1]
+    STEPS = [0, 20, 40, 60, 80, 100]
+    def _cb(pct: int, _msg: str = ""):
+        step = max((s for s in STEPS if s <= pct), default=0)
+        if step == last[0]: return
+        last[0] = step
+        bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
+        _asyncio.run_coroutine_threadsafe(edit_coro_fn(f"{icon}\n{bar} {step}%"), loop)
+    return _cb

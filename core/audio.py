@@ -1,4 +1,4 @@
-import logging, subprocess
+import logging
 from pathlib import Path
 from config import DATA_DIR, OUTPUT_DIR
 import ffmpeg
@@ -8,13 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 # get_verse_durations → subtitles.py
-
-def get_audio_file(voice: str, sura: int, aya: int) -> Path | None:
-    audio_dir = DATA_DIR / "audio"
-    path = audio_dir / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
-    if not path.exists():
-        path = download_audio(voice, sura, aya)
-    return path
 
 
 def gen_mp3(
@@ -40,6 +33,7 @@ def gen_mp3(
     output_path = voice_output_dir / filename
 
     if output_path.exists():
+        _strip_album_art(output_path)
         if progress_cb: progress_cb(100)
         return output_path
 
@@ -127,46 +121,30 @@ def gen_mp3(
 
 
 def _strip_album_art(path: Path) -> None:
-    """Remove embedded album art by rewriting the file without any video streams or APIC tags.
-    Uses ffmpeg with -map_metadata -1 to drop all metadata, then re-reads ID3 from the file
-    and re-adds only text tags. Since gen_mp3 already sets map_metadata=-1 during concat,
-    album art can only come from the individual source MP3s being concatenated. We strip
-    by passing through the audio, dropping all streams except audio, and writing clean tags.
+    """Remove embedded album art (APIC ID3 frames) using mutagen.
+
+    mutagen operates directly on the ID3 tag block — no re-mux, no temp files,
+    no ffmpeg version quirks. Works reliably regardless of how the source MP3
+    was encoded or tagged.
+
+    Removes all APIC frames (cover art, back cover, icon, etc.).
+    All other tags (title, artist, track, etc.) are left intact.
     """
-    tmp = path.with_suffix(".strip.mp3")
     try:
-        # Read existing title/artist from the file before stripping
-        probe = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_entries",
-             "format_tags=title,artist", str(path)],
-            capture_output=True, text=True,
-        )
-        import json
-        tags = {}
+        from mutagen.id3 import ID3, ID3NoHeaderError
         try:
-            info = json.loads(probe.stdout)
-            tags = info.get("format", {}).get("tags", {})
-        except Exception:
-            pass
+            tags = ID3(str(path))
+        except ID3NoHeaderError:
+            return   # no ID3 tags at all — nothing to strip
 
-        cmd = [
-            "ffmpeg", "-y", "-i", str(path),
-            "-map", "0:a",          # audio only — drops all video/image streams
-            "-c:a", "copy",         # no re-encode
-            "-map_metadata", "-1",  # drop ALL metadata (including APIC ID3 frames)
-            "-id3v2_version", "3",
-        ]
-        # Re-add text tags only
-        if tags.get("title"):  cmd += ["-metadata", f"title={tags['title']}"]
-        if tags.get("artist"): cmd += ["-metadata", f"artist={tags['artist']}"]
-        cmd.append(str(tmp))
+        apic_keys = [k for k in tags.keys() if k.startswith("APIC")]
+        if not apic_keys:
+            return   # no album art present
 
-        r = subprocess.run(cmd, capture_output=True)
-        if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 0:
-            tmp.replace(path)
-        else:
-            if tmp.exists(): tmp.unlink()
-            logger.warning("Album art strip produced empty/failed output for %s", path)
+        for k in apic_keys:
+            tags.delall(k)
+        tags.save(str(path), v2_version=3)
+        logger.info("Album art stripped from %s (%d APIC frame(s) removed)",
+                    path.name, len(apic_keys))
     except Exception as e:
-        logger.warning("Album art strip failed for %s: %s", path, e)
-        if tmp.exists(): tmp.unlink()
+        logger.warning("Album art strip failed for %s: %s", path.name, e)

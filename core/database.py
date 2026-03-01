@@ -47,6 +47,39 @@ class TafsirCache(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class BotStats(Base):
+    """Singleton row (id=1) accumulating lifetime bot statistics."""
+    __tablename__ = "bot_stats"
+
+    id                      = Column(Integer, primary_key=True, default=1)
+    generated_audio         = Column(Integer, default=0)   # total MP3s generated
+    generated_video         = Column(Integer, default=0)   # total MP4s generated
+    hadiths_sent_personal   = Column(Integer, default=0)   # /hadith command uses
+    hadiths_sent_channel    = Column(Integer, default=0)   # /chadith command uses
+    stars_donations         = Column(Integer, default=0)   # successful Stars payments
+
+
+def get_stats(session) -> "BotStats":
+    """Fetch (or create) the singleton stats row."""
+    row = session.query(BotStats).filter_by(id=1).first()
+    if not row:
+        row = BotStats(id=1)
+        session.add(row)
+        session.commit()
+    return row
+
+
+def increment_stat(field: str, amount: int = 1) -> None:
+    """Atomically increment a BotStats counter field."""
+    session = get_session()
+    try:
+        row = get_stats(session)
+        setattr(row, field, (getattr(row, field) or 0) + amount)
+        session.commit()
+    finally:
+        session.close()
+
+
 engine  = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 Session = sessionmaker(bind=engine)
 

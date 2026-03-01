@@ -4,9 +4,9 @@
 
 ## 🟡 Planned
 
-- [ ] **Daily verse push** — `/subscribe` sends a random verse every morning via APScheduler
-- [ ] **Bookmarks** — `/bookmark` saves a verse; `/bookmarks` lists them with buttons
+- [ ] **Bookmarks** — `/bookmark` saves an aya; `/bookmarks` lists them with buttons
 - [ ] **Quiz mode** — show a verse, user guesses the sura, track score per user
+- [ ] **Daily verse push to users** — `/subscribe` to opt in; sends a random verse every morning
 
 ---
 
@@ -14,20 +14,22 @@
 
 ### 🌟 Core features
 - [x] 18 reciters — MP3 with full ID3 metadata; album art stripped from output files
-- [x] **Video generation** — Pillow PNGs + FFmpeg composite; black bg, white text; landscape / portrait
-- [x] Video ratio — landscape 16:9 / portrait 9:16 — direct toggle in settings (no submenu)
+- [x] **Video generation** — Pillow PNGs + FFmpeg composite; black bg, white text; landscape / portrait. The only Quran bot on Telegram with this feature.
+- [x] Video ratio — landscape 16:9 / portrait 9:16, inline toggle in settings
 - [x] Text export — SRT (timestamped) · LRC (timestamped)
 - [x] Two tafsirs — Al-Muyassar and Al-Jalalayn, character-length pagination
-- [x] Full-text search — verse inline in message, 2-per-row buttons, char-length pagination
-- [x] 604 Mushaf pages — paginated with ◀️▶️
-- [x] Go-to-page button on single-aya keyboard
+- [x] Full-text Arabic search — comprehensive normalization, verse inline in message, 2-per-row buttons, char-length pagination
+- [x] 604 Mushaf pages — paginated with ◀️▶️, go-to-page button on single-aya keyboard
 - [x] NLU — Arabic + English: aya / range / surah / page / search
 - [x] Fuzzy sura name matching (rapidfuzz)
-- [x] Telegram Stars donations + multi-method payment addresses (PayPal, BTC, ETH, SOL…)
+- [x] Telegram Stars + multi-method donations (PayPal, BTC, ETH, SOL…) with click-to-copy addresses
+- [x] **Basmala handling** — `﷽` in text/search, `﷽\n` in page view, removed in video/subtitles
+- [x] **Daily azkar to channel** — random dhikr from Husn Al-Muslim DB at 07:00 UTC
 
 ### ⏳ Queue & concurrency
 - [x] Serial request queue — SQLite-backed, survives restarts
-- [x] Silent enqueue — no wait message; media arrives directly
+- [x] Position message sent immediately → reused as progress bar → `"."` → deleted
+- [x] Cached file_id hits bypass queue entirely — sent instantly from handler
 - [x] Cancel button on every queued request
 - [x] `ThreadPoolExecutor(2)` — bot stays responsive during FFmpeg encoding
 - [x] 5-step progress bar for video (🎬) and audio (🎧) — `▰▰▱▱▱ 40%` format
@@ -39,22 +41,19 @@
 - [x] Reciter-namespaced output paths `output/{reciter_code}/`
 
 ### 🔒 Validation & safety
-- [x] `start_aya > end_aya` rejected with localized error
-- [x] `start_aya < 1` or `end_aya > sura_length` rejected with localized error
+- [x] `start_aya > end_aya` and out-of-range ayas rejected with localized errors
 - [x] 50-aya cap for ranges; full-sura requests always unrestricted
 - [x] Rate limiting — 10 requests / user / hour
 
 ### 🎨 UI & UX
-- [x] Arabic-Indic digits `١٢٣` in video frames
+- [x] Arabic-Indic digits `١٢٣` in video frames only
 - [x] Sura names always prefixed: `سورة الإخلاص` / `Surah Al-Ikhlas`
-- [x] All UI strings localized (ar.json + en.json)
-- [x] `/help` — localized usage guide
+- [x] All UI strings in ar.json + en.json (no Arabic-Indic numerals in locale strings)
+- [x] `/help` — detailed guide with channel link and feedback instructions
 - [x] `/feedback` — forwarded to ADMIN_IDS with user info
-- [x] `ٰ` (superscript alif U+0670) normalized in Arabic search
 
 ### 🔧 Admin & ops
-- [x] `/admin` — users (AR/EN split), queue depth, processing count, cached files, rate-limited count, top reciters
-- [x] `ADMIN_IDS` in `config.py`
-- [x] `MAX_AYAS_PER_REQUEST` in `config.py`
+- [x] `/admin` — users (AR/EN split), queue, processing, cached files, rate-limited, top reciters
+- [x] `ADMIN_IDS`, `MAX_AYAS_PER_REQUEST`, `CHANNEL_ID`, `CHANNEL_URL` in `config.py`
 - [x] Auto storage purge on low disk
 - [x] Channel button hidden when `CHANNEL_URL` is empty

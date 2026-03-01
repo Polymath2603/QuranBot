@@ -15,6 +15,12 @@ def _build_sura_names(quran_data):
 
 def _match_sura_name(text, sura_names):
     if not text.strip(): return None
+    # Guard: long multi-word text without digits is almost certainly a search query,
+    # not a sura name. Sura names are 1-3 words max. Fuzzy-matching a full sentence
+    # against short sura names produces false positives via partial_ratio.
+    words = text.strip().split()
+    if len(words) > 3 and not re.search(r'\d', text):
+        return None
     best = process.extractOne(text, [x["name"] for x in sura_names], scorer=fuzz.WRatio)
     if best and best[1] > 80:
         m = next((x for x in sura_names if x["name"] == best[0]), None)
@@ -49,7 +55,16 @@ def _detect_colon(original, sura_names):
     prefix = original[:m.start()].strip()
     if prefix:
         sura = _match_sura_name(normalize_arabic(prefix), sura_names)
-        if sura: return {"type": "range", "sura": sura, "from_aya": s1, "to_aya": a2 or a1}
+        if sura:
+            # s1:a1[-a2] where prefix already gives the sura.
+            # If s1 == sura, the user repeated the sura number → treat a1 as aya.
+            # Otherwise s1 is from_aya and a1/a2 are to_aya.
+            if s1 == sura:
+                if a2: return {"type": "range", "sura": sura, "from_aya": a1, "to_aya": a2}
+                return {"type": "aya", "sura": sura, "aya": a1}
+            else:
+                if a2: return {"type": "range", "sura": sura, "from_aya": s1, "to_aya": a2}
+                return {"type": "range", "sura": sura, "from_aya": s1, "to_aya": a1}
     if a2: return {"type": "range", "sura": s1, "from_aya": a1, "to_aya": a2}
     return {"type": "aya", "sura": s1, "aya": a1}
 
@@ -76,7 +91,7 @@ def parse_message(text: str, quran_data: dict) -> dict:
     original   = text.strip()
     normalized = normalize_arabic(original)
     keywords   = re.sub(r"(from|من)\s+",                       "FROM ", normalized, flags=re.IGNORECASE)
-    keywords   = re.sub(r"(to|الي|إلي|حتي|الى|إلى|حتى)\s+", "TO ",   keywords,   flags=re.IGNORECASE)
+    keywords   = re.sub(r"(to|الي|إلي|حتي)\s+",                        "TO ",   keywords,   flags=re.IGNORECASE)
     names      = _build_sura_names(quran_data)
     return (
         _detect_page(keywords) or
