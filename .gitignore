@@ -70,7 +70,7 @@ data/*.sqlite*
 !data/metadata/
 !data/text/
 !data/.gitkeep
-!data/UthmanTN_v2-0.ttf
+!data/UthmanTNKFGQPC Uthmanic Script HAFS.otf.ttf
 
 # Output directory
 output/*

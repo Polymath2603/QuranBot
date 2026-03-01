@@ -2,12 +2,24 @@
 import json, logging, subprocess
 from pathlib import Path
 
+
+def _resolve_ffprobe() -> str:
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+    except Exception:
+        pass
+    return "ffprobe"
+
+
+_FFPROBE = _resolve_ffprobe()
+
 logger = logging.getLogger(__name__)
 
 def probe_duration(path: Path) -> float:
     try:
         r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
+            [_FFPROBE, "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
             capture_output=True,
         )
         data = json.loads(r.stdout)

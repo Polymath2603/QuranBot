@@ -2,7 +2,24 @@
 
 ---
 
-## 🟢 2026-03-01 — Current
+## 🟢 2026-03-01 (Session 2) — Current
+
+### 🔄 Changed
+- **`ffmpeg-python` → `static-ffmpeg`** (`pip install static-ffmpeg`, no `apt` required).
+  `static_ffmpeg.add_paths()` downloads a pre-built static binary on first run and injects
+  it into PATH automatically.
+  - `core/audio.py`: removed `ffmpeg` Python library; rewrote concat using subprocess with
+    the concat demuxer (`-f concat -safe 0`, stream-copy, no re-encode). filter_complex
+    fallback retained.
+  - `core/video.py` / `core/subtitles.py`: subprocess calls now resolve binaries through
+    `_resolve_ff()` / `_resolve_ffprobe()` — same static-ffmpeg mechanism.
+  - `requirements.txt`: `ffmpeg-python>=0.2.0` → `static-ffmpeg>=2.5`.
+- **Hadith** (`core/hadith.py`): 9 bundled SQLite databases in `data/hadith/`.
+  Weighted random selection across all books. No network required.
+
+---
+
+## 🟡 2026-03-01 (Session 1) —
 - changelog not updated yet
 - neither are documents
 - all documents might include outdated information currently 
@@ -10,7 +27,7 @@
 - i updated the code but not the documents
 - wait next commit, maybe tomorrow or next week
 
-## 🟢 2026-02-28 — Latest changelog update
+## 🟡 2026-02-28 (Session 3)
 
 ### 🐛 Fixed
 - **Search: long queries returned no results** — root cause: U+0670 (dagger alif ٰ)
@@ -42,7 +59,7 @@
 
 ---
 
-## 🟡 2026-02-28
+## 🟡 2026-02-28 (Session 2)
 
 ### 🐛 Fixed
 - **Search false negatives** — NLU `_match_sura_name()` was fuzzy-matching full sentences (e.g. "الله لا اله الا هو الحي القيوم") against sura names via `WRatio`'s partial matching, causing long queries to be classified as sura navigation instead of search. Fix: skip sura name matching when input is more than 3 words and contains no digits.
@@ -60,7 +77,7 @@
 
 ---
 
-## 🟡 2026-02-28
+## 🟡 2026-02-28 (Session 1)
 
 ### 🐛 Fixed
 - **`/dhikr` error messages not localized** — all five status strings (no channel, pool empty, no text, sent, error) now use `t()` with locale keys in both `ar.json` and `en.json`.

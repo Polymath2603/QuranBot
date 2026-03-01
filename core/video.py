@@ -17,6 +17,18 @@ Progress callback: gen_video accepts progress_cb(pct: int, msg: str).
 
 import json, logging, subprocess, tempfile
 from pathlib import Path
+
+
+def _resolve_ff() -> tuple[str, str]:
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+    except Exception:
+        pass
+    return "ffmpeg", "ffprobe"
+
+
+_FFMPEG, _FFPROBE = _resolve_ff()
 from PIL import Image, ImageDraw, ImageFont
 
 from config import (
@@ -202,7 +214,7 @@ def _build_entries(verses_list, start_aya, verse_durations):
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
 
 def _run(cmd: list) -> None:
-    full = ["ffmpeg", "-y"] + [str(x) for x in cmd]
+    full = [_FFMPEG, "-y"] + [str(x) for x in cmd]
     logger.debug("ffmpeg: %s", " ".join(full))
     r = subprocess.run(full, capture_output=True)
     if r.returncode != 0:
@@ -211,7 +223,7 @@ def _run(cmd: list) -> None:
 def _probe_audio_duration(path: Path):
     try:
         r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json",
+            [_FFPROBE, "-v", "quiet", "-print_format", "json",
              "-show_streams", "-select_streams", "a", str(path)],
             capture_output=True,
         )

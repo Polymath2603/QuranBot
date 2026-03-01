@@ -1,10 +1,29 @@
-import logging
+import logging, subprocess, tempfile
 from pathlib import Path
 from config import DATA_DIR, OUTPUT_DIR
-import ffmpeg
 from .downloader import download_audio
 
 logger = logging.getLogger(__name__)
+
+
+# ── Resolve ffmpeg binary once (static-ffmpeg pip package or system fallback) ──
+def _resolve_ffmpeg() -> str:
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()   # downloads static binary on first call, injects into PATH
+    except Exception:
+        pass
+    return "ffmpeg"
+
+_FFMPEG = _resolve_ffmpeg()
+
+
+def _ff(*args) -> None:
+    """Run ffmpeg with -y; raise RuntimeError with stderr on failure."""
+    cmd = [_FFMPEG, "-y"] + [str(a) for a in args]
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.decode(errors="replace"))
 
 
 # get_verse_durations → subtitles.py
@@ -26,18 +45,18 @@ def gen_mp3(
     if not artist:
         artist = voice
 
-    range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
-    filename = f"{voice}_{range_id}.mp3"
+    range_id         = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
+    filename         = f"{voice}_{range_id}.mp3"
     voice_output_dir = output_dir / voice
     voice_output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = voice_output_dir / filename
+    output_path      = voice_output_dir / filename
 
     if output_path.exists():
         _strip_album_art(output_path)
         if progress_cb: progress_cb(100)
         return output_path
 
-    # Collect audio files
+    # ── collect aya files ──────────────────────────────────────────────────
     files = []
     for sura in range(start_sura, end_sura + 1):
         max_aya   = int(quran_data["Sura"][sura][1])
@@ -46,105 +65,91 @@ def gen_mp3(
         for aya in range(aya_start, aya_end + 1):
             files.append((sura, aya))
 
-    total = len(files)
+    total      = len(files)
     downloaded = []
     for idx, (sura, aya) in enumerate(files):
         path = audio_dir / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
-
         if path.exists() and path.stat().st_size == 0:
-            logger.warning(f"Empty audio file, re-downloading: {path}")
+            logger.warning("Empty audio file, re-downloading: %s", path)
             path.unlink()
-
         if not path.exists():
             path = download_audio(voice, sura, aya)
-
         if not path or not path.exists() or path.stat().st_size == 0:
-            if path and path.exists():
-                path.unlink()
+            if path and path.exists(): path.unlink()
             raise FileNotFoundError(f"Failed to download valid audio: {sura}:{aya}")
-
         downloaded.append(path)
         if progress_cb:
-            # Download phase covers 0-70%; leave 70-100% for concat+strip
             progress_cb(int((idx + 1) / total * 70))
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    temp = voice_output_dir / f"temp_{filename}"
+    temp       = voice_output_dir / f"temp_{filename}"
+    flist_path = None
 
-    metadata_args = {
-        "metadata:g:0": f"title={title}",
-        "metadata:g:1": f"artist={artist}",
-        "id3v2_version": "3",
-        "map_metadata": "-1",
-        "vn": None,
-    }
-
+    # ── primary: concat demuxer (stream-copy, no re-encode, fast) ─────────
     try:
-        inputs = [ffmpeg.input(str(f)) for f in downloaded]
-        (
-            ffmpeg.concat(*inputs, v=0, a=1)
-            .output(str(temp), **metadata_args)
-            .overwrite_output()
-            .run(quiet=True)
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as flist:
+            for p in downloaded:
+                flist.write(f"file '{p.as_posix()}'\n")
+            flist_path = Path(flist.name)
+
+        _ff(
+            "-f", "concat", "-safe", "0", "-i", flist_path,
+            "-c:a", "copy",
+            "-map_metadata", "-1",
+            "-id3v2_version", "3",
+            "-metadata", f"title={title}",
+            "-metadata", f"artist={artist}",
+            str(temp),
         )
         temp.rename(output_path)
-    except ffmpeg.Error as e:
-        stderr = e.stderr.decode() if e.stderr else str(e)
-        logger.warning(f"FFmpeg concat failed: {stderr}. Trying simple concat...")
+
+    except RuntimeError as e:
+        logger.warning("Concat demuxer failed (%s) — retrying with filter_complex", e)
+        if temp.exists(): temp.unlink()
+        # ── fallback: filter_complex (re-encodes, always works) ───────────
         try:
-            inputs = [ffmpeg.input(str(f)) for f in downloaded]
-            (
-                ffmpeg.concat(*inputs, v=0, a=1)
-                .output(
-                    str(output_path),
-                    map_metadata="-1",
-                    **{"metadata:g:0": f"title={title}", "metadata:g:1": f"artist={artist}"},
-                )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        except ffmpeg.Error as e2:
-            stderr2 = e2.stderr.decode() if e2.stderr else str(e2)
-            logger.error(f"Fallback concat failed: {stderr2}")
-            raise RuntimeError(f"FFmpeg error: {stderr2}")
+            args = []
+            for p in downloaded:
+                args += ["-i", str(p)]
+            args += [
+                "-filter_complex", f"concat=n={len(downloaded)}:v=0:a=1[a]",
+                "-map", "[a]",
+                "-map_metadata", "-1",
+                "-id3v2_version", "3",
+                "-metadata", f"title={title}",
+                "-metadata", f"artist={artist}",
+                str(output_path),
+            ]
+            _ff(*args)
+        except RuntimeError as e2:
+            logger.error("Fallback concat also failed: %s", e2)
+            raise
     finally:
-        if temp.exists():
-            temp.unlink()
+        if temp.exists(): temp.unlink()
+        if flist_path:
+            try: flist_path.unlink()
+            except Exception: pass
 
     if progress_cb: progress_cb(85)
-
-    # Strip any embedded album art (APIC ID3 tag) from the output MP3
     _strip_album_art(output_path)
-
     if progress_cb: progress_cb(100)
     return output_path
 
 
 def _strip_album_art(path: Path) -> None:
-    """Remove embedded album art (APIC ID3 frames) using mutagen.
-
-    mutagen operates directly on the ID3 tag block — no re-mux, no temp files,
-    no ffmpeg version quirks. Works reliably regardless of how the source MP3
-    was encoded or tagged.
-
-    Removes all APIC frames (cover art, back cover, icon, etc.).
-    All other tags (title, artist, track, etc.) are left intact.
-    """
+    """Remove embedded album art (APIC ID3 frames) using mutagen — no ffmpeg needed."""
     try:
         from mutagen.id3 import ID3, ID3NoHeaderError
         try:
             tags = ID3(str(path))
         except ID3NoHeaderError:
-            return   # no ID3 tags at all — nothing to strip
-
+            return
         apic_keys = [k for k in tags.keys() if k.startswith("APIC")]
         if not apic_keys:
-            return   # no album art present
-
+            return
         for k in apic_keys:
             tags.delall(k)
         tags.save(str(path), v2_version=3)
-        logger.info("Album art stripped from %s (%d APIC frame(s) removed)",
-                    path.name, len(apic_keys))
+        logger.info("Album art stripped from %s (%d APIC frame(s))", path.name, len(apic_keys))
     except Exception as e:
         logger.warning("Album art strip failed for %s: %s", path.name, e)
