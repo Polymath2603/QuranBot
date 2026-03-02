@@ -12,6 +12,7 @@ LOCALE_DIR = BASE_DIR / "locales"
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
 CHANNEL_URL = os.getenv("CHANNEL_URL", "")
 CHANNEL_ID  = os.getenv("CHANNEL_ID", "")
+DONATE_URL  = os.getenv("DONATE_URL", "")  # link to channel post with donation addresses
 
 AUDIO_API = "https://everyayah.com/data"
 QURAN_API = "https://api.alquran.cloud/v1"
@@ -53,6 +54,14 @@ PURGE_THRESHOLD_MB  = 200
 WARN_THRESHOLD_MB   = 500
 RATE_WINDOW_SECONDS = 3600
 RATE_MAX_REQUESTS   = 10
+
+# ---------------------------------------------------------------------------
+# Daily hadith scheduler
+# ---------------------------------------------------------------------------
+# Number of hadiths sent to CHANNEL_ID each day (set 0 to disable)
+DAILY_HADITH_COUNT = int(os.getenv("DAILY_HADITH_COUNT", "3"))
+# UTC hours at which to send them — must have exactly DAILY_HADITH_COUNT entries
+DAILY_HADITH_HOURS = [int(h) for h in os.getenv("DAILY_HADITH_HOURS", "7,14,20").split(",") if h.strip()]
 
 # ---------------------------------------------------------------------------
 # Admin & request limits

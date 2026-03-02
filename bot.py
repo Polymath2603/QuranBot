@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import datetime
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -15,7 +16,8 @@ from config import (
     BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR, DEFAULT_VOICE, CHANNEL_URL, CHANNEL_ID,
     HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT, HTTP_WRITE_TIMEOUT,
     HTTP_POOL_SIZE, HTTP_POOL_TIMEOUT, VIDEO_DEFAULT_RATIO,
-    ADMIN_IDS, MAX_AYAS_PER_REQUEST, CHAR_LIMIT
+    ADMIN_IDS, MAX_AYAS_PER_REQUEST, CHAR_LIMIT, DONATE_URL,
+    DAILY_HADITH_COUNT, DAILY_HADITH_HOURS,
 )
 from core.data import (
     load_quran_data, load_quran_text, load_quran_text_simple,
@@ -45,7 +47,7 @@ from core.utils     import (
     get_free_mb, make_progress_cb,
 )
 from core.queue     import request_queue, QueueItem
-from core.hadith    import get_random_hadith, format_hadith, get_total_count
+from core.hadith    import get_random_hadith, format_hadith
 
 logging.basicConfig(format="%(asctime)s %(name)s %(levelname)s %(message)s", level=logging.WARNING)
 
@@ -314,10 +316,12 @@ async def donate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(t("stars_50",  lang), callback_data="stars_50")],
         [InlineKeyboardButton(t("stars_100", lang), callback_data="stars_100"),
          InlineKeyboardButton(t("stars_500", lang), callback_data="stars_500")],
-        [InlineKeyboardButton(t("back",      lang), callback_data="menu_main")],
     ]
+    if DONATE_URL:
+        keyboard.append([InlineKeyboardButton(t("donate_other", lang), url=DONATE_URL)])
+    keyboard.append([InlineKeyboardButton(t("back", lang), callback_data="menu_main")])
     await query.edit_message_text(
-        t("donate_title", lang) + "\n\n" + t("donate_manual", lang),
+        t("donate_title", lang),
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="MarkdownV2",
         disable_web_page_preview=True,
@@ -815,8 +819,6 @@ async def page_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, page_
 # Search helpers
 # ---------------------------------------------------------------------------
 
-CHAR_LIMIT = CHAR_LIMIT
-
 async def _send_search_results(message, results: list, query_text: str, lang: str, page_offset: int):
     """
     Send search results as a message with verse text and 2-per-row sura+aya buttons.
@@ -1205,10 +1207,37 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Entry point
 # ---------------------------------------------------------------------------
 
+async def _daily_hadith_job(context) -> None:
+    """Job callback: send one random hadith to the channel."""
+    if not CHANNEL_ID:
+        return
+    entry = get_random_hadith()
+    if not entry:
+        return
+    text = format_hadith(entry)
+    if not text:
+        return
+    try:
+        await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        increment_stat("hadiths_sent_channel")
+    except Exception as e:
+        logger.error("Daily hadith job failed: %s", e)
+
+
 async def _post_init(app):
-    """Called after Application is built — start the queue consumer."""
+    """Called after Application is built — start the queue consumer and schedule daily hadiths."""
     request_queue.set_processor(_process_queue_item)
     await request_queue.start(app.bot)
+
+    # Schedule daily hadith posts to the channel
+    if CHANNEL_ID and DAILY_HADITH_COUNT > 0 and app.job_queue:
+        hours = DAILY_HADITH_HOURS[:DAILY_HADITH_COUNT]
+        for hour in hours:
+            app.job_queue.run_daily(
+                _daily_hadith_job,
+                time=datetime.time(hour=hour, minute=0, tzinfo=datetime.timezone.utc),
+            )
+        logger.info("Daily hadith scheduler: %d job(s) at UTC hours %s", len(hours), hours)
 
 
 def main():

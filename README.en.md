@@ -22,8 +22,8 @@ A Telegram bot for the Holy Quran. Search, listen, read tafsir, export subtitles
 - 🎧 **18 reciters** — Alafasy, Sudais, Abdul Basit, Husary, and more.
 - 🔍 **Smart Arabic search** — full Quran text search with normalization (alif variants, tashkeel, hamza, superscript alif).
 - 📚 **Tafsir** — Al-Muyassar and Al-Jalalayn, paginated.
-- 📄 **Subtitle export** — SRT and LRC with accurate ffprobe timestamps.
-- 📿 **Hadith** — `/hadith` sends a random authenticated Arabic hadith from hadeethenc.com. `/chadith` (admin) pushes one to the channel.
+- 📄 **Subtitle export** — SRT and LRC with accurate per-verse timestamps from ffprobe.
+- 📿 **Hadith** — `/hadith` sends a random Arabic hadith from local SQLite databases (9 books, ~35k hadiths). `/chadith` (admin) pushes one to the channel.
 - ⚡ **Instant delivery** — generated files are cached; repeat requests skip the queue entirely.
 - 🌐 **Arabic and English** UI.
 
@@ -67,7 +67,7 @@ The verse appears with action buttons:
 
 ## Self-hosting
 
-**Requirements:** Python 3.10+, FFmpeg
+**Requirements:** Python 3.10+, FFmpeg (place binaries in `bin/` or install system-wide)
 
 ```bash
 git clone https://github.com/yourname/quranbot
@@ -78,10 +78,12 @@ pip install -r requirements.txt
 Create `.env`:
 
 ```env
-TELEGRAM_BOT_TOKEN=your_token_here  # was BOT_TOKEN — fixed
+BOT_TOKEN=your_token_here
+CHANNEL_URL=https://t.me/yourchannel
+CHANNEL_ID=@yourchannel
+ADMIN_IDS=123456789
+DONATE_URL=https://t.me/yourchannel/123
 ```
-
-Hadith feature uses [hadeethenc.com](https://hadeethenc.com) API (no setup required).
 
 ```bash
 python bot.py
@@ -94,7 +96,7 @@ ADMIN_IDS            = [123456789]
 CHANNEL_URL          = "https://t.me/yourchannel"   # inline button
 CHANNEL_ID           = "@yourchannel"               # channel for /chadith
 MAX_AYAS_PER_REQUEST = 40
-VIDEO_DEFAULT_RATIO  = "landscape"
+VIDEO_DEFAULT_RATIO  = "portrait"
 DEFAULT_VOICE        = "Alafasy_64kbps"
 ```
 
@@ -105,11 +107,15 @@ DEFAULT_VOICE        = "Alafasy_64kbps"
 | | |
 |---|---|
 | 💳 PayPal | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
-| 🔶 Binance ID | `1011264323` |
+| 🔸 Binance ID | `1011264323` |
 | 🟡 Bybit ID | `467077834` |
-| ₿ BTC | `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp` |
-| 🔷 ETH / BNB | `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf` |
-| 🟣 SOL | `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn` |
+| 🟢 TRC20 | `TMW5uSDN6sMUBNirMoqY1icpsfa7GhPZfK` |
+| 🟢 BEP20/ERC20 | `0x7a8887c2ac3e596f6170c9e28b44e6b6d025c854` |
+| 🔵 LTC | `LVswXiD6Vd2dejXvGbZLa1R8jkvg748F4q` |
+| 🔵 TON | `UQAllRezWgHi3LPrSwyvAb4zazIph6j6goU7lMaqcFWFBxVH` |
+| 🟠 BTC | `1rSX6BDN1nqDMyBHqceySkZSs6PHUP23m` |
+| 🟣 SOL | `d8RonhC8oEHssrQjN1Y4UWHnd6MMP33XGCKtfNL4j59` |
+| ⭐ Telegram Stars | Via the bot directly |
 
 ---
 
@@ -121,4 +127,4 @@ DEFAULT_VOICE        = "Alafasy_64kbps"
 | Audio files | [EveryAyah.com](https://everyayah.com) | Free, non-commercial |
 | Tafsir API | [AlQuran.cloud](https://alquran.cloud/api) | Free API |
 | Uthmanic font | [KFGQPC](https://fonts.qurancomplex.gov.sa) | Free, non-commercial |
-| Hadith API | [hadeethenc.com](https://hadeethenc.com) | Public, no auth |
+| Hadith databases | [IsmailHosenIsmailJames](https://github.com/IsmailHosenIsmailJames/compressed_hadith_sqlite) | MIT |

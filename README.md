@@ -23,7 +23,7 @@
 - 🔍 **بحث ذكي** — يبحث في النص الكامل مع تطبيع عربي شامل (ألفات، تشكيل، همزات).
 - 📚 **تفسيران** — الميسر والجلالين مع تصفح بالصفحات.
 - 📄 **تصدير** — SRT وLRC مع توقيتات دقيقة.
-- 📿 **أحاديث نبوية** — يُرسل ذكراً من حصن المسلم للقناة كل صباح.
+- 📿 **أحاديث نبوية** — `/hadith` يُرسل حديثاً عشوائياً بالعربية. `/chadith` (للمشرف) يُرسله للقناة.
 - ⚡ **إرسال فوري** — الملفات المولَّدة مُخزَّنة، والطلبات المكررة تُرسَل فوراً.
 - 🌐 **عربي وإنجليزي** — واجهة بالكامل بالغتين.
 
@@ -67,7 +67,7 @@
 
 ## التشغيل الذاتي
 
-**المتطلبات:** Python 3.10+ وFFmpeg
+**المتطلبات:** Python 3.10+، FFmpeg (في `bin/` أو مثبَّت على النظام)
 
 ```bash
 git clone https://github.com/yourname/quranbot
@@ -78,10 +78,12 @@ pip install -r requirements.txt
 أنشئ ملف `.env`:
 
 ```env
-TELEGRAM_BOT_TOKEN=your_token_here
+BOT_TOKEN=your_token_here
+CHANNEL_URL=https://t.me/yourchannel
+CHANNEL_ID=@yourchannel
+ADMIN_IDS=123456789
+DONATE_URL=https://t.me/yourchannel/123
 ```
-
-خاصية الحديث تستخدم [hadeethenc.com](https://hadeethenc.com) (لا تحتاج إعداد).
 
 ```bash
 python bot.py
@@ -92,9 +94,9 @@ python bot.py
 ```python
 ADMIN_IDS            = [123456789]
 CHANNEL_URL          = "https://t.me/yourchannel"
-CHANNEL_ID           = "@yourchannel"   # هدف الأذكار اليومية
-MAX_AYAS_PER_REQUEST = 50
-VIDEO_DEFAULT_RATIO  = "landscape"
+CHANNEL_ID           = "@yourchannel"
+MAX_AYAS_PER_REQUEST = 40
+VIDEO_DEFAULT_RATIO  = "portrait"
 DEFAULT_VOICE        = "Alafasy_64kbps"
 ```
 
@@ -105,11 +107,15 @@ DEFAULT_VOICE        = "Alafasy_64kbps"
 | | |
 |---|---|
 | 💳 PayPal | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
-| 🔶 Binance ID | `1011264323` |
+| 🔸 Binance ID | `1011264323` |
 | 🟡 Bybit ID | `467077834` |
-| ₿ BTC | `15kPSKNLEgVH6Jy3RtNaT2mPsxTMS6MAEp` |
-| 🔷 ETH / BNB | `0xc4f7076dd25a38f2256b5c23b8ca859cc42924cf` |
-| 🟣 SOL | `EWcxGVtbohy8CdFLb2HNUqSHdecRiWKLywgMLwsXByhn` |
+| 🟢 TRC20 | `TMW5uSDN6sMUBNirMoqY1icpsfa7GhPZfK` |
+| 🟢 BEP20/ERC20 | `0x7a8887c2ac3e596f6170c9e28b44e6b6d025c854` |
+| 🔵 LTC | `LVswXiD6Vd2dejXvGbZLa1R8jkvg748F4q` |
+| 🔵 TON | `UQAllRezWgHi3LPrSwyvAb4zazIph6j6goU7lMaqcFWFBxVH` |
+| 🟠 BTC | `1rSX6BDN1nqDMyBHqceySkZSs6PHUP23m` |
+| 🟣 SOL | `d8RonhC8oEHssrQjN1Y4UWHnd6MMP33XGCKtfNL4j59` |
+| ⭐ Telegram Stars | عبر البوت مباشرة |
 
 ---
 
@@ -121,4 +127,4 @@ DEFAULT_VOICE        = "Alafasy_64kbps"
 | الملفات الصوتية | [EveryAyah.com](https://everyayah.com) | مجاني، غير تجاري |
 | API التفسير | [AlQuran.cloud](https://alquran.cloud/api) | مجاني |
 | الخط العثماني | [KFGQPC](https://fonts.qurancomplex.gov.sa) | مجاني، غير تجاري |
-| Hadith API | [hadeethenc.com](https://hadeethenc.com) | عام |
+| قواعد الأحاديث | [IsmailHosenIsmailJames](https://github.com/IsmailHosenIsmailJames/compressed_hadith_sqlite) | MIT |

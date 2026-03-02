@@ -57,6 +57,7 @@ class RequestQueue:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._bot = None
         self._processor_fn = None   # injected from bot.py to avoid circular import
+        self._cancelled_ids: set = set()  # fast in-memory cancel lookup
 
     def set_processor(self, fn):
         """fn(bot, item: QueueItem) → None  (async)"""
@@ -115,6 +116,7 @@ class RequestQueue:
                 return False
             item.status = "cancelled"
             session.commit()
+            self._cancelled_ids.add(item_id)   # skip DB lookup in _consume
             return True
         finally:
             session.close()
@@ -136,6 +138,13 @@ class RequestQueue:
     async def _consume(self):
         while True:
             item_id = await self._queue.get()
+
+            # Fast path: skip without DB round-trip if cancelled in-memory
+            if item_id in self._cancelled_ids:
+                self._cancelled_ids.discard(item_id)
+                self._queue.task_done()
+                continue
+
             session = get_session()
             item = session.query(QueueItem).filter_by(id=item_id).first()
 

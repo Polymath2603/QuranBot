@@ -15,20 +15,8 @@ Ratio (landscape/portrait) controls output resolution from VIDEO_SIZES.
 Progress callback: gen_video accepts progress_cb(pct: int, msg: str).
 """
 
-import json, logging, subprocess, tempfile
+import json, logging, re, subprocess, tempfile
 from pathlib import Path
-
-
-def _resolve_ff() -> tuple[str, str]:
-    try:
-        import static_ffmpeg
-        static_ffmpeg.add_paths()
-    except Exception:
-        pass
-    return "ffmpeg", "ffprobe"
-
-
-_FFMPEG, _FFPROBE = _resolve_ff()
 from PIL import Image, ImageDraw, ImageFont
 
 from config import (
@@ -194,9 +182,8 @@ def _clean_verse(text: str) -> str:
     These appear in Uthmani text and cause rendering artefacts with KFGQPC font.
     Also removes the dagger alif U+0670 for the same reason.
     """
-    import re as _re
-    text = _re.sub(r'\u0670', '', text)          # dagger alif
-    text = _re.sub(r'[\u06D6-\u06ED]', '', text)  # Quranic annotation marks
+    text = re.sub(r'\u0670', '', text)          # dagger alif
+    text = re.sub(r'[\u06D6-\u06ED]', '', text)  # Quranic annotation marks
     return text
 
 
@@ -214,7 +201,7 @@ def _build_entries(verses_list, start_aya, verse_durations):
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
 
 def _run(cmd: list) -> None:
-    full = [_FFMPEG, "-y"] + [str(x) for x in cmd]
+    full = ["ffmpeg", "-y"] + [str(x) for x in cmd]
     logger.debug("ffmpeg: %s", " ".join(full))
     r = subprocess.run(full, capture_output=True)
     if r.returncode != 0:
@@ -223,7 +210,7 @@ def _run(cmd: list) -> None:
 def _probe_audio_duration(path: Path):
     try:
         r = subprocess.run(
-            [_FFPROBE, "-v", "quiet", "-print_format", "json",
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
              "-show_streams", "-select_streams", "a", str(path)],
             capture_output=True,
         )
