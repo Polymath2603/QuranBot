@@ -8,6 +8,8 @@
 
 🇸🇦 [العربية](README.md) · 🌐 English
 
+**[▶️ Open Bot](https://t.me/YOUR_BOT_USERNAME)** · **[📢 Channel](https://t.me/YOUR_CHANNEL_USERNAME)**
+
 </div>
 
 ---
@@ -23,7 +25,7 @@ A Telegram bot for the Holy Quran. Search, listen, read tafsir, export subtitles
 - 🔍 **Smart Arabic search** — full Quran text search with normalization (alif variants, tashkeel, hamza, superscript alif).
 - 📚 **Tafsir** — Al-Muyassar and Al-Jalalayn, paginated.
 - 📄 **Subtitle export** — SRT and LRC with accurate per-verse timestamps from ffprobe.
-- 📿 **Hadith** — `/hadith` sends a random Arabic hadith from local SQLite databases (9 books, ~35k hadiths). `/chadith` (admin) pushes one to the channel.
+- 📿 **Hadith** — `/hadith` sends a random Arabic hadith. `/chadith` (admin) pushes one to the channel. Also auto-posts to the channel daily.
 - ⚡ **Instant delivery** — generated files are cached; repeat requests skip the queue entirely.
 - 🌐 **Arabic and English** UI.
 
@@ -67,7 +69,7 @@ The verse appears with action buttons:
 
 ## Self-hosting
 
-**Requirements:** Python 3.10+, FFmpeg (place binaries in `bin/` or install system-wide)
+**Requirements:** Python 3.10+, FFmpeg static binaries in `bin/` (see below)
 
 ```bash
 git clone https://github.com/yourname/quranbot
@@ -83,21 +85,23 @@ CHANNEL_URL=https://t.me/yourchannel
 CHANNEL_ID=@yourchannel
 ADMIN_IDS=123456789
 DONATE_URL=https://t.me/yourchannel/123
+DAILY_HADITH_COUNT=3
+```
+
+Download FFmpeg static binaries into `bin/`:
+
+```bash
+# Linux x86_64
+mkdir -p bin
+wget -q https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
+  -O /tmp/ffmpeg.tar.xz
+tar -xf /tmp/ffmpeg.tar.xz -C /tmp
+cp /tmp/ffmpeg-*/bin/ffmpeg /tmp/ffmpeg-*/bin/ffprobe bin/
+chmod +x bin/ffmpeg bin/ffprobe
 ```
 
 ```bash
 python bot.py
-```
-
-**Key settings in `config.py`:**
-
-```python
-ADMIN_IDS            = [123456789]
-CHANNEL_URL          = "https://t.me/yourchannel"   # inline button
-CHANNEL_ID           = "@yourchannel"               # channel for /chadith
-MAX_AYAS_PER_REQUEST = 40
-VIDEO_DEFAULT_RATIO  = "portrait"
-DEFAULT_VOICE        = "Alafasy_64kbps"
 ```
 
 ---

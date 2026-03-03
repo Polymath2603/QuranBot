@@ -44,7 +44,7 @@ from core.utils     import (
     safe_filename,
     check_and_purge_storage, is_rate_limited,
     get_file_id, set_file_id, file_id_count,
-    get_free_mb, make_progress_cb,
+    get_free_mb, make_progress_cb, log_error,
 )
 from core.queue     import request_queue, QueueItem
 from core.hadith    import get_random_hadith, format_hadith
@@ -975,6 +975,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         t("help_text", user.language, channel=CHANNEL_URL or ""),
         parse_mode="Markdown",
+        disable_web_page_preview=True,
     )
 
 
@@ -1152,6 +1153,12 @@ async def chadith_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("Unhandled exception:", exc_info=context.error)
+    extra = {}
+    if isinstance(update, Update):
+        if update.effective_user:  extra["user_id"] = update.effective_user.id
+        if update.effective_chat:  extra["chat_id"] = update.effective_chat.id
+        if update.callback_query:  extra["callback"] = update.callback_query.data
+    log_error(context.error, context="error_handler", extra=extra or None)
     if isinstance(update, Update) and update.effective_message:
         user = get_db_user(update.effective_user) if update.effective_user else None
         lang = user.language if user else "ar"
@@ -1222,6 +1229,7 @@ async def _daily_hadith_job(context) -> None:
         increment_stat("hadiths_sent_channel")
     except Exception as e:
         logger.error("Daily hadith job failed: %s", e)
+        log_error(e, context="daily_hadith_job")
 
 
 async def _post_init(app):

@@ -17,6 +17,19 @@ DONATE_URL  = os.getenv("DONATE_URL", "")  # link to channel post with donation 
 AUDIO_API = "https://everyayah.com/data"
 QURAN_API = "https://api.alquran.cloud/v1"
 
+# ---------------------------------------------------------------------------
+# FFmpeg binaries — static builds in bin/ take priority over system install
+# ---------------------------------------------------------------------------
+def _find_bin(name: str) -> str:
+    """Return path to local bin/{name} if it exists and is executable, else name (system PATH)."""
+    local = BASE_DIR / "bin" / name
+    if local.exists() and local.stat().st_mode & 0o111:
+        return str(local)
+    return name   # rely on system PATH
+
+FFMPEG_BIN  = _find_bin("ffmpeg")
+FFPROBE_BIN = _find_bin("ffprobe")
+
 CHAR_LIMIT  = 800
 
 # ---------------------------------------------------------------------------
@@ -58,10 +71,14 @@ RATE_MAX_REQUESTS   = 10
 # ---------------------------------------------------------------------------
 # Daily hadith scheduler
 # ---------------------------------------------------------------------------
-# Number of hadiths sent to CHANNEL_ID each day (set 0 to disable)
+# Number of hadiths sent to CHANNEL_ID each day (set 0 to disable).
+# Send times are auto-distributed evenly across 24h UTC:
+#   DAILY_HADITH_COUNT=1 → [0]
+#   DAILY_HADITH_COUNT=3 → [0, 8, 16]
+#   DAILY_HADITH_COUNT=4 → [0, 6, 12, 18]
 DAILY_HADITH_COUNT = int(os.getenv("DAILY_HADITH_COUNT", "3"))
-# UTC hours at which to send them — must have exactly DAILY_HADITH_COUNT entries
-DAILY_HADITH_HOURS = [int(h) for h in os.getenv("DAILY_HADITH_HOURS", "7,14,20").split(",") if h.strip()]
+# Auto-distribute sends evenly across 24h: count=3 → [0,8,16], count=4 → [0,6,12,18]
+DAILY_HADITH_HOURS = [round(24 * i / DAILY_HADITH_COUNT) % 24 for i in range(DAILY_HADITH_COUNT)]
 
 # ---------------------------------------------------------------------------
 # Admin & request limits

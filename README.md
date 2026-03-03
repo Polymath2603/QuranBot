@@ -8,6 +8,8 @@
 
 🇸🇦 العربية · [🌐 English](README.en.md)
 
+**[▶️ افتح البوت](https://t.me/YOUR_BOT_USERNAME)** · **[📢 القناة](https://t.me/YOUR_CHANNEL_USERNAME)**
+
 </div>
 
 ---
@@ -22,8 +24,8 @@
 - 🎧 **18 قارئاً** — العفاسي، السديس، عبد الباسط، الحصري، وغيرهم.
 - 🔍 **بحث ذكي** — يبحث في النص الكامل مع تطبيع عربي شامل (ألفات، تشكيل، همزات).
 - 📚 **تفسيران** — الميسر والجلالين مع تصفح بالصفحات.
-- 📄 **تصدير** — SRT وLRC مع توقيتات دقيقة.
-- 📿 **أحاديث نبوية** — `/hadith` يُرسل حديثاً عشوائياً بالعربية. `/chadith` (للمشرف) يُرسله للقناة.
+- 📄 **تصدير** — SRT وLRC مع توقيتات دقيقة لكل آية.
+- 📿 **أحاديث نبوية** — `/hadith` يُرسل حديثاً عشوائياً. `/chadith` (للمشرف) يُرسله للقناة. وينشر تلقائياً في القناة يومياً.
 - ⚡ **إرسال فوري** — الملفات المولَّدة مُخزَّنة، والطلبات المكررة تُرسَل فوراً.
 - 🌐 **عربي وإنجليزي** — واجهة بالكامل بالغتين.
 
@@ -67,7 +69,7 @@
 
 ## التشغيل الذاتي
 
-**المتطلبات:** Python 3.10+، FFmpeg (في `bin/` أو مثبَّت على النظام)
+**المتطلبات:** Python 3.10+، FFmpeg (ثنائيات ثابتة في `bin/` — انظر أدناه)
 
 ```bash
 git clone https://github.com/yourname/quranbot
@@ -83,21 +85,23 @@ CHANNEL_URL=https://t.me/yourchannel
 CHANNEL_ID=@yourchannel
 ADMIN_IDS=123456789
 DONATE_URL=https://t.me/yourchannel/123
+DAILY_HADITH_COUNT=3
+```
+
+أنزّل ثنائيات FFmpeg الثابتة وضعها في `bin/`:
+
+```bash
+# Linux x86_64
+mkdir -p bin
+wget -q https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
+  -O /tmp/ffmpeg.tar.xz
+tar -xf /tmp/ffmpeg.tar.xz -C /tmp
+cp /tmp/ffmpeg-*/bin/ffmpeg /tmp/ffmpeg-*/bin/ffprobe bin/
+chmod +x bin/ffmpeg bin/ffprobe
 ```
 
 ```bash
 python bot.py
-```
-
-**الإعدادات الرئيسية في `config.py`:**
-
-```python
-ADMIN_IDS            = [123456789]
-CHANNEL_URL          = "https://t.me/yourchannel"
-CHANNEL_ID           = "@yourchannel"
-MAX_AYAS_PER_REQUEST = 40
-VIDEO_DEFAULT_RATIO  = "portrait"
-DEFAULT_VOICE        = "Alafasy_64kbps"
 ```
 
 ---

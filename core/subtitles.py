@@ -1,13 +1,14 @@
 """subtitles.py — SRT / LRC generation with real per-verse timestamps."""
 import json, logging, subprocess
 from pathlib import Path
+from config import FFPROBE_BIN
 
 logger = logging.getLogger(__name__)
 
 def probe_duration(path: Path) -> float:
     try:
         r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
+            [FFPROBE_BIN, "-v", "quiet", "-print_format", "json", "-show_streams", str(path)],
             capture_output=True,
         )
         data = json.loads(r.stdout)

@@ -136,3 +136,58 @@ def make_progress_cb(edit_coro_fn, loop, icon: str = "🎬"):
         bar  = "▰" * (step // 20) + "▱" * (5 - step // 20)
         _asyncio.run_coroutine_threadsafe(edit_coro_fn(f"{icon}\n{bar} {step}%"), loop)
     return _cb
+
+
+# ---------------------------------------------------------------------------
+# Persistent error log  (BASE_DIR/errors.json)
+# Appends one JSON object per error. Capped at 500 entries (oldest dropped).
+# ---------------------------------------------------------------------------
+import traceback as _traceback
+from datetime import datetime as _dt, timezone as _tz
+from config import BASE_DIR as _BASE_DIR
+
+_ERRORS_PATH = _BASE_DIR / "errors.json"
+_MAX_ERRORS  = 500
+
+
+def log_error(
+    error: BaseException,
+    context: str = "",
+    extra: dict | None = None,
+) -> None:
+    """Append an error record to errors.json.
+
+    Args:
+        error:   The exception that occurred.
+        context: Short label for where it happened (e.g. 'queue_processor').
+        extra:   Optional dict of additional fields (user_id, chat_id, etc.).
+    """
+    record = {
+        "ts":      _dt.now(_tz.utc).isoformat(timespec="seconds"),
+        "context": context,
+        "type":    type(error).__name__,
+        "msg":     str(error),
+        "tb":      _traceback.format_exc(),
+    }
+    if extra:
+        record.update(extra)
+
+    try:
+        _BASE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            entries = _json.loads(_ERRORS_PATH.read_text(encoding="utf-8"))
+            if not isinstance(entries, list):
+                entries = []
+        except (FileNotFoundError, _json.JSONDecodeError):
+            entries = []
+
+        entries.append(record)
+        if len(entries) > _MAX_ERRORS:
+            entries = entries[-_MAX_ERRORS:]   # keep newest
+
+        _ERRORS_PATH.write_text(
+            _json.dumps(entries, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.warning("Could not write errors.json: %s", e)

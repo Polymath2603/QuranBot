@@ -2,7 +2,31 @@
 
 ---
 
-## 🟢 2026-03-02 — Current
+## 🟢 2026-03-03 — Current
+
+### ✨ Added
+- **`errors.json` persistent error log** — `log_error()` in `core/utils.py` appends one JSON record per exception: timestamp, context label, type, message, full traceback, and optional fields (user_id, chat_id, item_id). Capped at 500 entries. Wired into: global `error_handler`, queue processor failures, and daily hadith job failures.
+- **`FFMPEG_BIN` / `FFPROBE_BIN` in `config.py`** — `_find_bin()` checks `bin/ffmpeg` (and `bin/ffprobe`) first; falls back to system PATH if not present. All three modules (`audio.py`, `video.py`, `subtitles.py`) now use these constants — no hardcoded binary names anywhere.
+- **Static FFmpeg download instructions** in both READMEs (BtbN/FFmpeg-Builds).
+- **`bin/ffmpeg` and `bin/ffprobe` added to `.gitignore`** — platform-specific, not committed.
+
+### 🔄 Changed
+- **Bot and channel links in README** — placeholder links (`YOUR_BOT_USERNAME` / `YOUR_CHANNEL_USERNAME`) added to both README.md and README.en.md, ready to fill in.
+- **`disable_web_page_preview=True` in `/help`** — prevents channel URL from expanding into a preview card.
+- **Audio pipeline: mutagen and ffmpeg-python removed** — `core/audio.py` rewritten to use `subprocess` + `ffmpeg` directly in two clean phases:
+  - Phase 1 (concat): `ffmpeg -f concat` demuxer, `-map_metadata -1`, title/artist added, `-codec:a copy`.
+  - Phase 2 (strip): second copy-only pass with `-map_metadata -1` to remove residual ID3/APIC frames from source files.
+- **Daily hadith hours auto-computed** — `DAILY_HADITH_HOURS` env var removed. Hours computed as `[round(24*i/n) % 24 for i in range(n)]`. Examples: 3 → `[0,8,16]`, 4 → `[0,6,12,18]`.
+- **`.gitignore` cleaned** — stripped ~60 lines of irrelevant boilerplate.
+
+### 🗑️ Removed
+- **`mutagen`** from `requirements.txt`.
+- **`ffmpeg-python`** from `requirements.txt`.
+- **`DAILY_HADITH_HOURS`** from `config.py` and `.env.example` — auto-computed now.
+
+---
+
+## 🟢 2026-03-02
 
 ### ✨ Added
 - **Daily hadith scheduler** — `_daily_hadith_job` sends a random hadith to `CHANNEL_ID` automatically. Powered by PTB's built-in `JobQueue` (no extra scheduler dependency). Scheduled via `_post_init` using `run_daily()` at configurable UTC hours.
@@ -14,7 +38,7 @@
 
 ---
 
-## 🟡 2026-03-01
+## 🟢 2026-03-01
 
 ### 🐛 Fixed
 - **`.env.example` wrong token key** — was `TELEGRAM_BOT_TOKEN`; `config.py` reads `BOT_TOKEN`. Anyone following the example would start the bot with an empty token and get a silent failure on first update. Fixed to `BOT_TOKEN`.
@@ -43,7 +67,7 @@
 
 ---
 
-## 🟡 2026-02-28
+## 🟢 2026-02-28
 
 
 ### 🐛 Fixed

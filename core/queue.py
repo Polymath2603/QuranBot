@@ -165,6 +165,8 @@ class RequestQueue:
                     await self._processor_fn(self._bot, item_id)
             except Exception as e:
                 logger.error("Queue processor error for item %d: %s", item_id, e, exc_info=True)
+                from .utils import log_error
+                log_error(e, context="queue_processor", extra={"item_id": item_id})
                 await self._notify_error(item_id)
 
             self._queue.task_done()

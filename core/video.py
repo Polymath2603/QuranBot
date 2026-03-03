@@ -24,6 +24,7 @@ from config import (
     VIDEO_FONT_SIZE, VIDEO_MIN_FONT_SIZE,
     VIDEO_PADDING, FONT_PATH,
     VIDEO_SIZES, VIDEO_DEFAULT_RATIO,
+    FFMPEG_BIN, FFPROBE_BIN,
 )
 
 logger = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ def _build_entries(verses_list, start_aya, verse_durations):
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
 
 def _run(cmd: list) -> None:
-    full = ["ffmpeg", "-y"] + [str(x) for x in cmd]
+    full = [FFMPEG_BIN, "-y"] + [str(x) for x in cmd]
     logger.debug("ffmpeg: %s", " ".join(full))
     r = subprocess.run(full, capture_output=True)
     if r.returncode != 0:
@@ -210,7 +211,7 @@ def _run(cmd: list) -> None:
 def _probe_audio_duration(path: Path):
     try:
         r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-print_format", "json",
+            [FFPROBE_BIN, "-v", "quiet", "-print_format", "json",
              "-show_streams", "-select_streams", "a", str(path)],
             capture_output=True,
         )

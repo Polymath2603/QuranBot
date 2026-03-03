@@ -1,13 +1,25 @@
+"""audio.py — MP3 generation for QBot.
+
+Two-phase pipeline:
+  Phase 1 — FFmpeg concat: joins all per-verse MP3s into one file.
+             All metadata and tags stripped at this stage (-map_metadata -1).
+  Phase 2 — FFmpeg strip:  second pass to remove any residual ID3 tags and
+             album-art frames that survive concat (e.g. from source files).
+             Uses -map_metadata -1 -codec:a copy — no re-encode.
+
+Doing it in two passes is intentional: concat focuses on joining audio cleanly,
+strip pass is a cheap copy-only operation that guarantees a clean output
+regardless of what the source files or FFmpeg version left behind.
+"""
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
-from config import DATA_DIR, OUTPUT_DIR
-import ffmpeg
+
+from config import FFMPEG_BIN
 from .downloader import download_audio
 
 logger = logging.getLogger(__name__)
-
-
-# get_verse_durations → subtitles.py
 
 
 def gen_mp3(
@@ -26,18 +38,17 @@ def gen_mp3(
     if not artist:
         artist = voice
 
-    range_id = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
-    filename = f"{voice}_{range_id}.mp3"
+    range_id         = f"{start_sura:03d}{start_aya:03d}{end_sura:03d}{end_aya:03d}"
+    filename         = f"{voice}_{range_id}.mp3"
     voice_output_dir = output_dir / voice
     voice_output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = voice_output_dir / filename
+    output_path      = voice_output_dir / filename
 
     if output_path.exists():
-        _strip_album_art(output_path)
         if progress_cb: progress_cb(100)
         return output_path
 
-    # Collect audio files
+    # ── Collect verse list ────────────────────────────────────────────────
     files = []
     for sura in range(start_sura, end_sura + 1):
         max_aya   = int(quran_data["Sura"][sura][1])
@@ -46,13 +57,14 @@ def gen_mp3(
         for aya in range(aya_start, aya_end + 1):
             files.append((sura, aya))
 
-    total = len(files)
+    # ── Phase 0: download missing files ──────────────────────────────────
+    total      = len(files)
     downloaded = []
     for idx, (sura, aya) in enumerate(files):
         path = audio_dir / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
 
         if path.exists() and path.stat().st_size == 0:
-            logger.warning(f"Empty audio file, re-downloading: {path}")
+            logger.warning("Empty audio file, re-downloading: %s", path)
             path.unlink()
 
         if not path.exists():
@@ -65,86 +77,48 @@ def gen_mp3(
 
         downloaded.append(path)
         if progress_cb:
-            # Download phase covers 0-70%; leave 70-100% for concat+strip
-            progress_cb(int((idx + 1) / total * 70))
+            progress_cb(int((idx + 1) / total * 65))   # 0–65%
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    temp = voice_output_dir / f"temp_{filename}"
-
-    metadata_args = {
-        "metadata:g:0": f"title={title}",
-        "metadata:g:1": f"artist={artist}",
-        "id3v2_version": "3",
-        "map_metadata": "-1",
-        "vn": None,
-    }
-
-    try:
-        inputs = [ffmpeg.input(str(f)) for f in downloaded]
-        (
-            ffmpeg.concat(*inputs, v=0, a=1)
-            .output(str(temp), **metadata_args)
-            .overwrite_output()
-            .run(quiet=True)
+    # ── Phase 1: concat ───────────────────────────────────────────────────
+    # Write a concat list file for FFmpeg's concat demuxer (safest for MP3).
+    # Strip all metadata at this stage; add title+artist explicitly.
+    with tempfile.TemporaryDirectory() as tmp:
+        concat_list = Path(tmp) / "list.txt"
+        concat_list.write_text(
+            "\n".join(f"file '{p}'" for p in downloaded), encoding="utf-8"
         )
-        temp.rename(output_path)
-    except ffmpeg.Error as e:
-        stderr = e.stderr.decode() if e.stderr else str(e)
-        logger.warning(f"FFmpeg concat failed: {stderr}. Trying simple concat...")
-        try:
-            inputs = [ffmpeg.input(str(f)) for f in downloaded]
-            (
-                ffmpeg.concat(*inputs, v=0, a=1)
-                .output(
-                    str(output_path),
-                    map_metadata="-1",
-                    **{"metadata:g:0": f"title={title}", "metadata:g:1": f"artist={artist}"},
-                )
-                .overwrite_output()
-                .run(quiet=True)
-            )
-        except ffmpeg.Error as e2:
-            stderr2 = e2.stderr.decode() if e2.stderr else str(e2)
-            logger.error(f"Fallback concat failed: {stderr2}")
-            raise RuntimeError(f"FFmpeg error: {stderr2}")
-    finally:
-        if temp.exists():
-            temp.unlink()
+        concat_out = Path(tmp) / "concat.mp3"
 
-    if progress_cb: progress_cb(85)
+        _ffmpeg([
+            "-f", "concat", "-safe", "0", "-i", str(concat_list),
+            "-map_metadata", "-1",
+            "-metadata", f"title={title}",
+            "-metadata", f"artist={artist}",
+            "-id3v2_version", "3",
+            "-codec:a", "copy",
+            str(concat_out),
+        ], stage="concat")
 
-    # Strip any embedded album art (APIC ID3 tag) from the output MP3
-    _strip_album_art(output_path)
+        if progress_cb: progress_cb(82)     # 65–82%
+
+        # ── Phase 2: strip residual tags / album art ──────────────────────
+        # A copy-only pass with -map_metadata -1 removes any ID3 frames
+        # (including APIC album-art) that survived from source files.
+        _ffmpeg([
+            "-i", str(concat_out),
+            "-map_metadata", "-1",
+            "-codec:a", "copy",
+            str(output_path),
+        ], stage="strip")
 
     if progress_cb: progress_cb(100)
     return output_path
 
 
-def _strip_album_art(path: Path) -> None:
-    """Remove embedded album art (APIC ID3 frames) using mutagen.
-
-    mutagen operates directly on the ID3 tag block — no re-mux, no temp files,
-    no ffmpeg version quirks. Works reliably regardless of how the source MP3
-    was encoded or tagged.
-
-    Removes all APIC frames (cover art, back cover, icon, etc.).
-    All other tags (title, artist, track, etc.) are left intact.
-    """
-    try:
-        from mutagen.id3 import ID3, ID3NoHeaderError
-        try:
-            tags = ID3(str(path))
-        except ID3NoHeaderError:
-            return   # no ID3 tags at all — nothing to strip
-
-        apic_keys = [k for k in tags.keys() if k.startswith("APIC")]
-        if not apic_keys:
-            return   # no album art present
-
-        for k in apic_keys:
-            tags.delall(k)
-        tags.save(str(path), v2_version=3)
-        logger.info("Album art stripped from %s (%d APIC frame(s) removed)",
-                    path.name, len(apic_keys))
-    except Exception as e:
-        logger.warning("Album art strip failed for %s: %s", path.name, e)
+def _ffmpeg(args: list[str], stage: str) -> None:
+    """Run ffmpeg with the given argument list. Raises RuntimeError on failure."""
+    cmd    = [FFMPEG_BIN, "-y", "-loglevel", "error"] + args
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        err = result.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"FFmpeg {stage} failed: {err}")
