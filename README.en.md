@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🌙 Quran Bot
+# 🌙 QuranBot
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-21+-229ED9)](https://github.com/python-telegram-bot/python-telegram-bot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](LICENSE)
 
-🇸🇦 [العربية](README.md) · 🌐 English
+[🇸🇦 العربية](README.md) · 🌐 English
 
 **[▶️ Open Bot](https://t.me/YOUR_BOT_USERNAME)** · **[📢 Channel](https://t.me/YOUR_CHANNEL_USERNAME)**
 
@@ -14,116 +14,118 @@
 
 ---
 
-A Telegram bot for the Holy Quran. Search, listen, read tafsir, export subtitles, and generate verse videos — all from a single chat.
+A Telegram bot for the Quran. Search, listen, read tafsir, and watch verse videos with audio.
 
 ---
 
 ## Features
 
-- 🎬 **Video generation** — verse-by-verse video with synced audio, landscape or portrait. The only Quran bot on Telegram with this feature.
-- 🎧 **18 reciters** — Alafasy, Sudais, Abdul Basit, Husary, and more.
-- 🔍 **Smart Arabic search** — full Quran text search with normalization (alif variants, tashkeel, hamza, superscript alif).
-- 📚 **Tafsir** — Al-Muyassar and Al-Jalalayn, paginated.
-- 📄 **Subtitle export** — SRT and LRC with accurate per-verse timestamps from ffprobe.
-- 📿 **Hadith** — `/hadith` sends a random Arabic hadith. `/chadith` (admin) pushes one to the channel. Also auto-posts to the channel daily.
-- ⚡ **Instant delivery** — generated files are cached; repeat requests skip the queue entirely.
-- 🌐 **Arabic and English** UI.
+- 📖 **Mushaf** — Display Quran pages from three sources: Hafs, Warsh, Color Tajweed. Caches file\_id after first send.
+- 🖼️ **Verse Images** — High-quality images (1080px) with 3 fonts and 3 themes. Auto or fixed dimensions.
+- 🎬 **Video** — Verse videos with synchronized audio, portrait or landscape.
+- 🎧 **18 Reciters** — Alafasy, As-Sudais, Abdul Basit, Al-Husary, and more.
+- 🔍 **Smart Search** — Full-text search with comprehensive Arabic normalization.
+- 📚 **Two Tafsirs** — Al-Muyassar and Al-Jalalayn, from local file then API fallback.
+- 📄 **Export** — SRT and LRC with accurate per-verse timestamps.
+- 📿 **Hadiths** — `/hadith` sends a random hadith. Auto-posts to channel daily.
+- ⚡ **Instant resend** — file\_id cached for every previously sent file.
+- 🌐 **Arabic & English** — Full bilingual interface.
 
 ---
 
 ## Usage
 
-Send a surah name, aya reference, page number, or Arabic text to search:
+Send a sura name, aya number, page number, or Arabic text to search:
 
 | Input | Example |
 |---|---|
-| Surah + aya | `Baqarah 255` · `البقرة 255` |
-| Range | `Fatihah 1-7` · `1:1-7` |
-| Surah name | `Kahf` · `الكهف` |
+| Sura + aya | `Baqarah 255` · `البقرة 255` |
+| Range | `Fatiha 1-7` · `1:1-7` |
+| Sura name | `Kahf` · `الكهف` |
 | Page | `page 5` · `صفحة 5` |
-| Search | `وما توفيقي إلا بالله` |
+| Search | `whatever they hide` |
 
-The verse appears with action buttons:
+The aya appears with action buttons:
 
 | Button | |
 |---|---|
+| 📖 Text | Display text or download as SRT / LRC |
 | 📚 Tafsir | Al-Muyassar or Al-Jalalayn |
-| 📖 Text | Inline or download as SRT / LRC |
-| 🎧 Audio | MP3 with your chosen reciter |
-| 🎬 Video | Generated video with synced audio |
-| 📄 Page N | Jump to that Mushaf page |
+| 🖼️ Image | Verse image (shown when verse fits screen) |
+| 🎬 Video | Video with synchronized audio |
+| 📄 Page N | Mushaf page |
+| 🎧 Audio | MP3 |
 
 ---
 
 ## Settings
 
-| | Options |
-|---|---|
-| Language | العربية / English |
-| Text format | Inline message / SRT / LRC |
-| Tafsir | Al-Muyassar / Al-Jalalayn |
-| Video ratio | Landscape 16:9 / Portrait 9:16 |
-| Reciter | 18 options |
+```
+⚙️ Settings
+├─ 📖 Source  (Hafs / Warsh / Tajweed)
+├─ 🎙️ Reciter  (18 options)
+└─ ⚙️ Other
+    ├─ 📚 Tafsir  (Al-Muyassar / Al-Jalalayn)
+    ├─ 📄 Format  (Message / Image / SRT / LRC)
+    ├─ 🎬 Video
+    │   ├─ Font  (Uthmani / Amiri / Noto Naskh)
+    │   ├─ Theme  (Dark / Parchment / Night)
+    │   └─ Ratio  (Portrait 9:16 / Landscape 16:9)
+    └─ 🖼️ Photo
+        ├─ Font  (Uthmani / Amiri / Noto Naskh)
+        ├─ Theme  (Parchment / Dark / Night)
+        └─ Resolution  (Auto / Portrait / Landscape)
+```
 
 ---
 
-## Self-hosting
+## Setup
 
-**Requirements:** Python 3.10+, FFmpeg static binaries in `bin/` (see below)
+**Requirements:** Python 3.10+, FFmpeg
 
 ```bash
 git clone https://github.com/yourname/quranbot
 cd quranbot
 pip install -r requirements.txt
-```
-
-Create `.env`:
-
-```env
-BOT_TOKEN=your_token_here
-CHANNEL_URL=https://t.me/yourchannel
-CHANNEL_ID=@yourchannel
-ADMIN_IDS=123456789
-DONATE_URL=https://t.me/yourchannel/123
-DAILY_HADITH_COUNT=3
-```
-
-Download FFmpeg static binaries into `bin/`:
-
-```bash
-# Linux x86_64
-mkdir -p bin
-wget -q https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
-  -O /tmp/ffmpeg.tar.xz
-tar -xf /tmp/ffmpeg.tar.xz -C /tmp
-cp /tmp/ffmpeg-*/bin/ffmpeg /tmp/ffmpeg-*/bin/ffprobe bin/
-chmod +x bin/ffmpeg bin/ffprobe
-```
-
-```bash
+cp .env.example .env
+# Edit .env — set BOT_TOKEN at minimum
 python bot.py
 ```
 
+**Static FFmpeg binaries** (optional — if FFmpeg isn't in PATH):
+
+```bash
+mkdir -p bin
+wget -q https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz -O /tmp/ff.tar.xz
+tar -xf /tmp/ff.tar.xz -C /tmp
+cp /tmp/ffmpeg-*/bin/{ffmpeg,ffprobe} bin/
+chmod +x bin/ffmpeg bin/ffprobe
+```
+
+### Mushaf page images (optional)
+
+Place PNG files in `data/images/{source}/`:
+
+```
+data/images/hafs/1.png  …  604.png
+data/images/warsh/1.png  …
+data/images/tajweed/1.png  …
+```
+
+The bot caches Telegram file\_ids in `ids.json` automatically after the first send.
+
+### Local tafsir files (optional)
+
+```
+data/tafsir/muyassar.json   {"1:1": "tafsir text", ...}
+data/tafsir/jalalayn.json
+```
+
+Falls back to alquran.cloud API if not present.
+
 ---
 
-## Support
-
-| | |
-|---|---|
-| 💳 PayPal | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
-| 🔸 Binance ID | `1011264323` |
-| 🟡 Bybit ID | `467077834` |
-| 🟢 TRC20 | `TMW5uSDN6sMUBNirMoqY1icpsfa7GhPZfK` |
-| 🟢 BEP20/ERC20 | `0x7a8887c2ac3e596f6170c9e28b44e6b6d025c854` |
-| 🔵 LTC | `LVswXiD6Vd2dejXvGbZLa1R8jkvg748F4q` |
-| 🔵 TON | `UQAllRezWgHi3LPrSwyvAb4zazIph6j6goU7lMaqcFWFBxVH` |
-| 🟠 BTC | `1rSX6BDN1nqDMyBHqceySkZSs6PHUP23m` |
-| 🟣 SOL | `d8RonhC8oEHssrQjN1Y4UWHnd6MMP33XGCKtfNL4j59` |
-| ⭐ Telegram Stars | Via the bot directly |
-
----
-
-## Credits & data sources
+## Data Sources
 
 | | Source | License |
 |---|---|---|

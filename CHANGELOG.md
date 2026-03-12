@@ -2,73 +2,81 @@
 
 ---
 
-## 🟢 2026-03-03 — Current
-
-### ✨ Added
-- **`errors.json` persistent error log** — `log_error()` in `core/utils.py` appends one JSON record per exception: timestamp, context label, type, message, full traceback, and optional fields (user_id, chat_id, item_id). Capped at 500 entries. Wired into: global `error_handler`, queue processor failures, and daily hadith job failures.
-- **`FFMPEG_BIN` / `FFPROBE_BIN` in `config.py`** — `_find_bin()` checks `bin/ffmpeg` (and `bin/ffprobe`) first; falls back to system PATH if not present. All three modules (`audio.py`, `video.py`, `subtitles.py`) now use these constants — no hardcoded binary names anywhere.
-- **Static FFmpeg download instructions** in both READMEs (BtbN/FFmpeg-Builds).
-- **`bin/ffmpeg` and `bin/ffprobe` added to `.gitignore`** — platform-specific, not committed.
-
-### 🔄 Changed
-- **Bot and channel links in README** — placeholder links (`YOUR_BOT_USERNAME` / `YOUR_CHANNEL_USERNAME`) added to both README.md and README.en.md, ready to fill in.
-- **`disable_web_page_preview=True` in `/help`** — prevents channel URL from expanding into a preview card.
-- **Audio pipeline: mutagen and ffmpeg-python removed** — `core/audio.py` rewritten to use `subprocess` + `ffmpeg` directly in two clean phases:
-  - Phase 1 (concat): `ffmpeg -f concat` demuxer, `-map_metadata -1`, title/artist added, `-codec:a copy`.
-  - Phase 2 (strip): second copy-only pass with `-map_metadata -1` to remove residual ID3/APIC frames from source files.
-- **Daily hadith hours auto-computed** — `DAILY_HADITH_HOURS` env var removed. Hours computed as `[round(24*i/n) % 24 for i in range(n)]`. Examples: 3 → `[0,8,16]`, 4 → `[0,6,12,18]`.
-- **`.gitignore` cleaned** — stripped ~60 lines of irrelevant boilerplate.
-
-### 🗑️ Removed
-- **`mutagen`** from `requirements.txt`.
-- **`ffmpeg-python`** from `requirements.txt`.
-- **`DAILY_HADITH_HOURS`** from `config.py` and `.env.example` — auto-computed now.
+# 📋 Changelog
 
 ---
 
-## 🟢 2026-03-02
-
-### ✨ Added
-- **Daily hadith scheduler** — `_daily_hadith_job` sends a random hadith to `CHANNEL_ID` automatically. Powered by PTB's built-in `JobQueue` (no extra scheduler dependency). Scheduled via `_post_init` using `run_daily()` at configurable UTC hours.
-- **`DAILY_HADITH_COUNT`** — number of hadiths sent per day (default `3`, set `0` to disable). Configured via `.env`.
-- **`DAILY_HADITH_HOURS`** — comma-separated UTC hours for each send (default `7,14,20`). Configured via `.env`.
-
-### 🔄 Changed
-- **`requirements.txt`** — `python-telegram-bot>=21.3` → `python-telegram-bot[job-queue]>=21.3` to enable `JobQueue`.
-
----
-
-## 🟢 2026-03-01
+## 🟢 2026-03-12 — Bug fixes & UX corrections
 
 ### 🐛 Fixed
-- **`.env.example` wrong token key** — was `TELEGRAM_BOT_TOKEN`; `config.py` reads `BOT_TOKEN`. Anyone following the example would start the bot with an empty token and get a silent failure on first update. Fixed to `BOT_TOKEN`.
-- **`subtitles._dur()` silent wrong output** — guard was commented out with a reference to `VIDEO_FALLBACK_DUR` which no longer exists. If `durations` was shorter than the verse count, the function silently returned garbage or crashed unpredictably. Now raises an explicit `IndexError` with a descriptive message pointing to the likely cause (missing audio files).
-- **`video._clean_verse()` importing `re` inside function** — `import re as _re` ran on every video frame. Moved to module-level import.
-
-### ✨ Added
-- **`DONATE_URL`** — new `.env` variable. Points to a channel post listing all donation addresses. Donate screen now shows a link button instead of embedding raw addresses in the bot message. Addresses are in the README and the linked post only.
-- **Channel button labelled `قناة نور الحديث`** — both `ar.json` and `en.json` updated. Arabic name used in both languages as requested.
+- **Image button always appeared** — "More" keyboard now hides Image button when aya count exceeds `AYAS_PER_IMG_PAGE` (default 5).
+- **Text message aya numbers were Arabic-Indic** — all aya numbers in text messages, titles, and captions now use western digits (123).
+- **Image resolution "auto" was removed by mistake** — restored as default. Video ratio was never affected.
+- **Image canvas was fixed at portrait/landscape** — "auto" resolution is now the default again, rendering content-fitted auto-height images at 1080px width.
+- **Back button had label text** — `back` locale keys now contain only `🔙` (no "Back" / "رجوع" text).
 
 ### 🔄 Changed
-- **Hadith source: hadeethenc.com API → local SQLite** — `core/hadith.py` completely rewritten. Now reads from 9 local SQLite files in `data/hadith/` (~35k hadiths across all books). DB counts are indexed at module import time — no repeated filesystem scans or connections per request. Weighted random selection by DB size is O(n_books). `threading.Lock` and `_ready` flag removed (startup index is deterministic and never changes). `get_hadith(id)` removed (was in changelog but never implemented). `get_total_count()` kept for completeness.
-- **`FILE_MAP` corrected** — `ara-dehlawi1.sqlite` (حجة الله البالغة) added; it was present in `data/hadith/` but never used. All 10 books now mapped.
-- **Donate handler** — `donate_manual` locale key removed; donate screen shows Stars buttons + `DONATE_URL` link button only. Addresses live in README and the linked channel post.
-- **Queue cancel fast-path** — `RequestQueue._cancelled_ids` set added. `cancel()` marks the item in-memory; `_consume()` checks the set first and skips the DB round-trip entirely for cancelled items.
-- **Dead locale keys removed** (both `ar.json` and `en.json`): `download_sura`, `search`, `progress_rendering`, `progress_encoding`, `progress_concat`, `progress_compositing`, `progress_uploading`, `donate_manual`.
-
-### 🗑️ Removed
-- **`CHAR_LIMIT = CHAR_LIMIT`** (bot.py line 818) — pointless self-assignment, already imported from config.
-- **`get_total_count` from bot.py import** — was imported but never called.
-
-### 📄 Docs
-- **TECHNICAL.md** fully rewritten — correct video pipeline (3 FFmpeg passes, not 1), correct audio pipeline (`mutagen` not `-map_metadata -1`), correct hadith source (local SQLite not hadeethenc.com API), azkar scheduler section removed, `data/hadith/` directory documented, `quran-simple.txt` added to data sources table, all config variables updated, database models table added, `file_id` cache key format documented.
-- **README.md / README.en.md** — donation addresses updated to match current bot values, hadith description corrected (local SQLite, not hadeethenc.com), `DONATE_URL` added to `.env` example, `MAX_AYAS_PER_REQUEST` corrected to 40, azkar daily-send claim removed.
-- **TODO.md** — "50-aya cap" corrected to 40, azkar entry removed from Done, donate entry updated.
+- `build_more_keyboard` gates Image button: hidden when `end - start + 1 > AYAS_PER_IMG_PAGE`.
+- `IMAGE_PADDING = 20` still in effect for fixed-canvas modes (portrait/landscape).
+- `DEFAULT_IMAGE_RESOLUTION = "auto"` restored.
 
 ---
 
-## 🟢 2026-02-28
+## 🟢 2026-03-12 — UX Polish
 
+### 🔄 Changed
+- **Settings → Other**: added Language toggle button (`🌐`) at top of the sub-menu.
+- **Settings**: Source and Reciter are now on separate rows (were combined on one row).
+- **Aya keyboard**: "More" expands to image / video / page / back (was already implemented; keyboard spec finalized).
+- **Image renderer**: `IMAGE_PADDING` reduced to 20px (from 40px) — text now uses near-full canvas width.
+- **Image resolution**: "auto" option removed; portrait (1080×1920) is now the default. Resolutions are portrait and landscape only.
+- **Video frames**: basmala completely removed from video frames (stripped before render, not displayed).
+- **Paging arrows**: ➡️ = next, ⬅️ = previous, 🔙 = back — applied uniformly across text paging, image paging, tafsir paging, mushaf pages, sura list, and voice list.
+- **Number format in text messages**: aya numbers always rendered as Arabic-Indic (٣) in all text message contexts.
+
+### 🗑️ Removed
+- `"auto"` image resolution option and `res_auto` locale key.
+- Basmala display logic from `video.py` `_build_entries` (basmala is now stripped, not rendered).
+
+---
+
+## 🟢 2026-03-12 — UX Reformat, Mushaf, Image Queue
+
+### 🐛 Fixed
+- **`_build_entries` NameError in `core/video.py`** — function body existed but the `def` line was accidentally stripped, causing a crash on every video generation request.
+
+### ✨ Added
+- **Mushaf pages** (`core/mushaf.py`) — serves local PNG files from `data/images/{source}/`. Caches Telegram `file_id` in `ids.json` per source. Three sources: hafs, warsh, tajweed (configured in `config.PAGE_SOURCES`). Not affected by text format settings.
+- **Image queue** — verse images now go through the serial request queue when not cached, same as audio/video.
+- **Image resolution setting** — auto (height from content), portrait (1080×1920), landscape (1920×1080).
+- **Photo settings sub-menu** — font, theme, resolution.
+- **`config.py` centralised lists** — `PAGE_SOURCES`, `TAFSIR_SOURCES`, `HADITH_FILES`, `IMAGE_RESOLUTIONS`, `img_fid_key()`, `vid_fid_key()`, `aud_fid_key()`. Adding/removing a reciter, tafsir, or mushaf source now requires only a config edit.
+
+### 🔄 Changed
+- **Aya keyboard** — text | tafsir | audio on row 1; "More →" expands image, video, page, back.
+- **Image button** — only shown inside "More" menu; verse character length no longer gates it.
+- **Page button** — opens mushaf image (not text). Works via `mushaf_handler`.
+- **Format cycle** — `msg → lrc → srt` (image removed from text format; image is its own button).
+- **Settings hierarchy** — Source + Reciter at top; Other → tafsir, format, video, photo.
+- **File-ID keys** — compact indexed format: `audio:{reciter}:{sura}:{start}:{end}`, `video:{reciter}:{sura}:{start}:{end}:{font}:{theme}:{ratio}`, `image:{sura}:{start}:{end}:{font}:{theme}:{res}`.
+- **Basmala + numbers in video** — same font-conditional logic as images: uthmani font uses raw Arabic basmala text and Arabic-Indic numerals; other fonts use ﷽ glyph and western digits.
+- **Tafsir** — cloud only (alquran.cloud API + DB cache); local file fallback removed.
+
+### 🗑️ Removed
+- `IMAGE_CHANNEL_ID` env var and all CDN upload logic.
+- `core/image.py`: `upload_to_cdn()`, `_img_cache_key()`.
+- `img` removed from text format cycle.
+
+
+## 🟢 2026-03-01 — Current
+- changelog not updated yet
+- neither are documents
+- all documents might include outdated information currently 
+- it's 2AM so i won't update it now
+- i updated the code but not the documents
+- wait next commit, maybe tomorrow or next week
+
+## 🟢 2026-02-28 — Latest changelog update
 
 ### 🐛 Fixed
 - **Search: long queries returned no results** — root cause: U+0670 (dagger alif ٰ)
@@ -84,77 +92,103 @@
   `mutagen>=1.47.0` added to `requirements.txt`.
 - **Azkar constants lingering in config.py** — `AZKAR_HOUR` and `AZKAR_MINUTE` removed.
 
-- **Search false negatives** — NLU `_match_sura_name()` was fuzzy-matching full sentences against sura names via `WRatio`'s partial matching, causing long queries to be classified as sura navigation instead of search. Fix: skip sura name matching when input is more than 3 words and contains no digits.
-- **Album art not stripped on cached files** — `gen_mp3()` early-returned on cache hit without running `_strip_album_art()`. Fix: always run `_strip_album_art()` on the returned path (idempotent).
-
-- **`/dhikr` error messages not localized** — all five status strings now use `t()`.
-- **`donate_title` bold syntax** — was Markdown `**bold**` inside HTML-mode message. Fixed by switching to MarkdownV2.
-- **`donate_manual` addresses not click-to-copy** — rewritten in MarkdownV2 with `>\`address\`` format.
-- **PayPal link preview** — `disable_web_page_preview=True` added.
-- **`feedback_empty` / `help_text` en.json** — synced to ar.json.
-
 ### ✨ Added
-- **Hadith feature** (`core/hadith.py`) — random Arabic hadiths from local SQLite databases.
+- **Hadith feature** (`core/hadith.py`) — random Arabic-only hadiths via
+  `hadeethenc.com/api/v1`. No auth required. Format: hadith text + separator + attribution.
   - `/hadith` — sends a random hadith to the requesting user.
   - `/chadith` — admin only: sends a random hadith to the configured channel.
 - **Admin statistics** — `/admin` now shows: users, queue, audio generated, video generated,
   hadiths sent (personal + channel), Telegram Stars donations, disk, cache, cached files,
   rate-limited users, top reciters.
 
-- **`BotStats` table** — new SQLite table tracking lifetime counters: `generated_audio`, `generated_video`, `hadiths_sent_personal`, `hadiths_sent_channel`, `stars_donations`.
-- **Admin panel expanded** — now shows all `BotStats` counters.
-
----
-
-- **25 Stars donation tier** — keyboard now 2×2.
-- **Dhikr locale keys** — `dhikr_no_channel`, `dhikr_pool_empty`, `dhikr_no_text`, `dhikr_sent`, `dhikr_error`.
-
 ### 🗑️ Removed
 - **Azkar entirely** — `core/azkar.py` deleted. `data/husn_en.json` can be safely deleted.
-  All scheduler code removed. Replaced by Hadith feature.
+  `AZKAR_HOUR` / `AZKAR_MINUTE` removed from `config.py`. All scheduler code removed.
+  Replaced by Hadith feature.
 
 ---
+
+## 🟡 2026-02-28
+
+### 🐛 Fixed
+- **Search false negatives** — NLU `_match_sura_name()` was fuzzy-matching full sentences (e.g. "الله لا اله الا هو الحي القيوم") against sura names via `WRatio`'s partial matching, causing long queries to be classified as sura navigation instead of search. Fix: skip sura name matching when input is more than 3 words and contains no digits.
+- **Album art not stripped on cached files** — `gen_mp3()` early-returned on cache hit without running `_strip_album_art()`. Old files generated before the strip was added were served with album art forever. Fix: always run `_strip_album_art()` on the returned path (idempotent — no-op if already clean).
+
+### ✨ Added
+- **`/hadith`** — sends a random Arabic hadith to the requesting user. Fetches from `hadeethenc.com` API (Arabic, authenticated hadiths only). Format: hadith text → attribution line (source | grade).
+- **`/chadith`** — admin-only: pushes a random Arabic hadith to the channel. Same source as `/hadith`.
+- **`BotStats` table** — new SQLite table tracking lifetime counters: `generated_audio`, `generated_video`, `hadiths_sent_personal`, `hadiths_sent_channel`, `stars_donations`.
+- **Admin panel expanded** — now shows all `BotStats` counters in addition to existing user/queue/disk stats.
+- **`core/hadith.py`** — new module. Wraps `hadeethenc.com/api/v1/` with `get_random_hadith()`, `get_hadith(id)`, `get_total_count()`, and `format_hadith()`.
+
+### 🗑️ Removed
+- **Azkar entirely** — `core/azkar.py` deleted. `data/husn_en.json` can be safely deleted. All scheduler code, `load_azkar` calls, dhikr locale keys removed from `bot.py`. Replaced by Hadith feature.
+
+---
+
+## 🟡 2026-02-28
+
+### 🐛 Fixed
+- **`/dhikr` error messages not localized** — all five status strings (no channel, pool empty, no text, sent, error) now use `t()` with locale keys in both `ar.json` and `en.json`.
+- **`donate_title` bold syntax** — was Markdown `**bold**` inside an HTML-mode message, rendering literally. Fixed by switching donate handler to MarkdownV2 and rewriting `donate_title` in both locales accordingly.
+- **`donate_manual` addresses not click-to-copy** — HTML `<blockquote>` tags with backticks were rendering backticks as literal characters. Rewritten in MarkdownV2: `>\`address\`` combines block-quote visual with monospace click-to-copy.
+- **PayPal link preview** — donate message now sets `disable_web_page_preview=True` to suppress the PayPal preview card.
+- **`feedback_empty` en.json** — synced to ar.json: example command now on its own line.
+- **`help_text` en.json** — `/feedback <message>` wording synced to ar.json.
+
+### ✨ Added
+- **25 Stars donation tier** — new ⭐ 25 Stars button added to donate keyboard. Keyboard is now 2×2 (25/50 top row, 100/500 bottom row).
+- **Telegram Stars section in donate_manual** — moved to bottom of the message after all wallet addresses, in both locales.
+- **Dhikr locale keys** — `dhikr_no_channel`, `dhikr_pool_empty`, `dhikr_no_text`, `dhikr_sent`, `dhikr_error` added to both `ar.json` and `en.json`.
 
 ### 🔄 Changed
-- **Donate handler** — switched to `parse_mode="MarkdownV2"`.
-- **Donate keyboard** — 4 Stars buttons in 2×2 grid.
-
----
+- **Donate handler** — switched from `parse_mode="Html"` to `parse_mode="MarkdownV2"`. `donate_title` and `donate_manual` in both locales rewritten for MDV2 (escaped special chars, `>\`code\`` for addresses).
+- **`donate_title`** — Stars heading removed from both locales (Stars section now appears at the end of `donate_manual` instead).
+- **Donate keyboard layout** — 4 Stars buttons arranged in 2×2 grid instead of 2+1 rows.
 
 ---
 
 ## 🟡 2026-02-27
 
 ### 🐛 Fixed
-- **Queue position messages never shown** — `status_msg_id=None` was passed to the queue. Fixed: handlers now send a `⏳` message immediately and pass its ID.
-- **Delete without edit** — progress messages now edited to `"."` before deletion.
-- **TXT format mentioned in help text** — removed from both locale files.
-- **Arabic-Indic numerals in locale strings** — replaced with ASCII digits in locale files (video keeps Arabic-Indic via Pillow independently).
+- **Queue position messages never shown** — `status_msg_id=None` was passed to the queue, so `_broadcast_positions` had nothing to edit. Fixed: handlers now send a `⏳` message immediately and pass its ID to the queue.
+- **Delete without edit** — progress/position messages are now edited to `"."` before deletion for a clean visual dismissal.
+- **TXT format still mentioned in help text** — removed from both `ar.json` and `en.json` `help_text` keys.
+- **Arabic-Indic numerals in locale strings** — all `٠١٢٣٤٥٦٧٨٩` replaced with `0-9` in both locale files (video generation keeps Arabic-Indic digits independently via Pillow rendering).
 
 ### ✨ Added
-- **Basmala handling** — context-sensitive: `﷽` in text/search, `﷽\n` in page view, stripped in video/SRT/LRC.
-- **`CHANNEL_ID`** added to `config.py`.
-- **Improved `/help`**.
+- **Daily azkar to channel** (`core/azkar.py`) — loads `data/hisnAlMuslim.json` (Husn Al-Muslim DB), picks a random dhikr, sends it to `CHANNEL_ID` at 07:00 UTC every day. Bot must be admin in the channel. Scheduler uses a lightweight asyncio loop (no extra dependencies).
+- **Basmala handling** — suras that start with `بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ` (all except 1:1 and 9:1) are now handled context-sensitively:
+  - **Text / search** → replaced with `﷽` symbol
+  - **Page navigation** → replaced with `﷽` + line break
+  - **Video / SRT / LRC** → removed entirely
+- **`CHANNEL_ID`** added to `config.py` (separate from `CHANNEL_URL` — ID is used by azkar scheduler, URL is used by inline button).
+- **Improved `/help`** — covers all input formats, all buttons, all commands, channel link, feedback instructions.
+- **Click-to-copy donation addresses** — all wallet addresses wrapped in backticks (Telegram inline code) in `donate_manual` locale key.
 
 ### 🔄 Changed
-- **Position message reused as progress bar** — edited in-place instead of sending a new message.
-- **Cached hits skip the queue entirely**.
+- **Position message reused as progress bar** — instead of sending a new message when generation starts, the position message is edited in-place to show the progress bar (`🎧\n▰▱▱▱▱ 20%`). One less message in chat.
+- **Cached hits skip the queue entirely** — if `file_id` cache hits in the handler, media is sent directly with no queue entry and no position message.
 
 ---
 
 ## 🔵 2026-02-26
 
 ### 🐛 Fixed
-- **Album art stripping** — `-map_metadata 0` preserved APIC frames. Fixed: `-map_metadata -1` + re-add title/artist only.
-- **Verse format inconsistency** — `back_to_verse_handler` rendered without aya number. Now consistent.
+- **Album art stripping** — previous implementation used `-map_metadata 0` which preserved APIC (image) ID3 frames. Fixed: metadata fully dropped with `-map_metadata -1`, then only `title` and `artist` re-added from `ffprobe`.
+- **Verse format inconsistency** — `back_to_verse_handler` still rendered `﴿ text ﴾` without aya number. Now consistent everywhere.
 
 ### ✨ Added
-- **Audio progress bar** — `gen_mp3` accepts `progress_cb`. Download phase 0–70%, concat 85%, strip 100%.
+- **Audio progress bar** — `gen_mp3` accepts `progress_cb`. Download phase 0–70%, concat 85%, strip 100%. Bar: `🎧\n▰▰▱▱▱ 40%`.
 
 ### 🔄 Changed
-- **Verse text format** — `﴿ verse (aya) ﴾` for single ayas; continuous block for ranges.
-- **Progress bars simplified** — format: `🎧\n{bar} {pct}%` / `🎬\n{bar} {pct}%`.
-- **TXT format removed** — cycle is now `msg → lrc → srt`.
+- **Verse text format** — `﴿ verse (aya) ﴾` for single ayas; `﴿ verse1 (1) verse2 (2) ... ﴾` continuous block for ranges.
+- **Progress bars simplified** — state description labels removed. Format: `🎧\n{bar} {pct}%` / `🎬\n{bar} {pct}%`.
+- **Wait messages removed** — no wait message on enqueue; media arrives after progress bar disappears.
+- **TXT format removed** — cycle is now `msg → lrc → srt`. Removed from all code, locale, and docs.
+
+### 🗑️ Removed
+- `fmt_txt` locale key. `generating_audio` / `generating_video` locale keys. `build_txt` import.
 
 ---
 
@@ -162,31 +196,47 @@
 
 ### 🐛 Fixed
 - `NameError: 'title' is not defined` in `play_audio_handler`.
-- `NameError: 'help_handler' is not defined`.
-- `DetachedInstanceError` on startup.
-- `start_aya > end_aya` and aya bounds validation.
+- `NameError: 'help_handler' is not defined` — output files not shipped. Fixed.
+- `DetachedInstanceError` on startup — queue accessed item after session close.
+- `start_aya > end_aya` and aya bounds — both rejected with localized errors.
 
 ### ✨ Added
-- `/help`, `/feedback`. Enhanced `/admin`. Superscript alif search normalization.
-- Go-to-page button, search results inline, char-length pagination.
-- `README.en.md`.
+- `/help` — localized usage guide. `/feedback <text>` — forwarded to `ADMIN_IDS`.
+- Enhanced `/admin` — AR/EN user split, queue count, cached files, rate-limited count.
+- `ٰ` (superscript alif U+0670) normalized in search.
+- Go-to-page button, search results inline, char-length pagination for text and tafsir.
+- `README.en.md` — English README with bidirectional nav links.
 
 ### 🔄 Changed
-- `voice` → `reciter_code`. Video ratio toggle inline. Max-aya cap for ranges only.
+- `voice` → `reciter_code`, `artist_name` → `reciter`.
+- Video ratio toggle inline in settings (no submenu).
+- Max-aya cap only for ranges; full-sura always allowed.
+- All docs converted to English.
+
+### 🗑️ Removed
+- Video background, color, border — stripped from all code and config.
+- `BG_DIR` from `config.py`. Dead video settings handlers and dispatch entries.
 
 ---
 
 ## 🔵 2026-02-24
 
 ### 🐛 Fixed
-- `build_verse_keyboard` crash. Empty `CHANNEL_URL` crash. Arabic-Indic aya numbers. Audio looping.
+- `build_verse_keyboard` crash — was returning `None`.
+- Empty `CHANNEL_URL` crash — button only shown when URL non-empty.
+- Arabic-Indic aya numbers in video — `١٢٣` not `(123)`.
+- Audio looping at end of video. Bot blocking during generation.
 
 ### ✨ Added
-- Serial request queue, permanent `file_id` cache, `/admin`, 5-step progress bar, video ratio, album art stripping, NLU, localization, Telegram Stars, tafsir, SRT/LRC.
+- Serial request queue (`core/queue.py`) — SQLite-backed, cancel button, survives restarts.
+- Permanent `file_id` cache — instant re-send with no re-upload.
+- `/admin` command. `MAX_AYAS_PER_REQUEST`, `ADMIN_IDS` in `config.py`.
+- 5-step progress bar. Video ratio portrait/landscape. Album art stripping.
+- All constants in `config.py`. NLU, localization, Telegram Stars, tafsir, SRT/LRC export.
 
 ### 🔄 Changed
-- Video pipeline — Pillow PNGs + FFmpeg composite, solid black `#141414` background.
-- Reciter-namespaced output paths.
+- Video pipeline — Pillow PNGs + single FFmpeg pass, solid black `#141414` background.
+- Reciter-namespaced output paths. `core/` as proper Python package.
 
 ---
 
@@ -195,6 +245,7 @@
 ### ✨ Added
 - `subtitles.py`, `verses.py`, `utils.py`, `nlu.py`, `search.py` extracted from `bot.py`.
 - SQLite user database, storage purge, rate limiter, LRU cache, persistent tafsir cache.
+- `callback_router` dispatch dict.
 
 ### 🐛 Fixed
 - SRT/LRC timestamps from `ffprobe`. Relative imports throughout `core/`.

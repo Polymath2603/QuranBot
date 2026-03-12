@@ -45,8 +45,10 @@ def check_and_purge_storage(*dirs: Path) -> None:
         logger.info(f"Purge complete. Deleted {total} file(s).")
 
 _rate_store: dict[int, list[float]] = {}
+_rate_prune_counter = 0
 
 def is_rate_limited(telegram_id: int) -> bool:
+    global _rate_prune_counter
     now = time.monotonic()
     ts = [t for t in _rate_store.get(telegram_id, []) if now - t < RATE_WINDOW_SECONDS]
     if len(ts) >= RATE_MAX_REQUESTS:
@@ -54,10 +56,18 @@ def is_rate_limited(telegram_id: int) -> bool:
         return True
     ts.append(now)
     _rate_store[telegram_id] = ts
+    # Prune dead entries every 500 calls to prevent unbounded dict growth
+    _rate_prune_counter += 1
+    if _rate_prune_counter >= 500:
+        _rate_prune_counter = 0
+        cutoff = now - RATE_WINDOW_SECONDS
+        dead = [uid for uid, times in _rate_store.items() if not times or times[-1] < cutoff]
+        for uid in dead:
+            del _rate_store[uid]
     return False
 
 class LRUCache:
-    def __init__(self, max_size: int = 500):
+    def __init__(self, max_size: int = 200):
         self._store: OrderedDict = OrderedDict()
         self._max_size = max_size
     def get(self, key: str):

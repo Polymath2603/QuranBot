@@ -34,7 +34,7 @@ class QueueItem(Base):
     id             = Column(Integer, primary_key=True, autoincrement=True)
     user_id        = Column(Integer, nullable=False, index=True)
     chat_id        = Column(Integer, nullable=False)
-    request_type   = Column(String, nullable=False)   # "audio" | "video"
+    request_type   = Column(String, nullable=False)   # "audio" | "video" | "image"
     params_json    = Column(Text,   nullable=False)
     lang           = Column(String, default="ar")
     status         = Column(String, default="pending") # pending|processing|done|cancelled

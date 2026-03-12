@@ -15,146 +15,65 @@ Ratio (landscape/portrait) controls output resolution from VIDEO_SIZES.
 Progress callback: gen_video accepts progress_cb(pct: int, msg: str).
 """
 
-import json, logging, re, subprocess, tempfile
+import json, logging, subprocess, tempfile
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
 
 from config import (
     VIDEO_FPS, VIDEO_FADE_DURATION, VIDEO_SYNC_OFFSET,
-    VIDEO_FONT_SIZE, VIDEO_MIN_FONT_SIZE,
-    VIDEO_PADDING, FONT_PATH,
     VIDEO_SIZES, VIDEO_DEFAULT_RATIO,
+    IMAGE_DEFAULT_FONT, VIDEO_DEFAULT_FONT, VIDEO_DEFAULT_BG, VIDEO_BACKGROUNDS,
     FFMPEG_BIN, FFPROBE_BIN,
 )
+from .image import _font, _wrap, _text_w, _clean_verse, to_arabic, to_number
 
 logger = logging.getLogger(__name__)
 
-# ── Font cache ────────────────────────────────────────────────────────────────
-
-_font_cache: dict = {}
-
-def _font(size: int):
-    if size not in _font_cache:
-        try:
-            _font_cache[size] = ImageFont.truetype(FONT_PATH, size)
-        except IOError:
-            _font_cache[size] = ImageFont.load_default()
-    return _font_cache[size]
+_VIDEO_TEXT_COLOR = (255, 255, 255, 255)
 
 
-# ── Text measurement ──────────────────────────────────────────────────────────
+def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
+    """Render one video frame PNG at a fixed (W, H) canvas size.
 
-def _text_w(draw, text: str, font) -> int:
-    bb = draw.textbbox((0, 0), text, font=font)
-    return bb[2] - bb[0]
-
-
-# ── Text wrapping — minimum 4 words per line ──────────────────────────────────
-
-MIN_WORDS_PER_LINE = 4
-
-def _wrap(draw, text: str, font, max_w: int) -> list:
-    words = text.split()
-    if not words:
-        return [""]
-
-    n       = len(words)
-    min_wpl = MIN_WORDS_PER_LINE if n >= MIN_WORDS_PER_LINE else 1
-    sp_w    = _text_w(draw, " ", font)
-    ww      = [_text_w(draw, w, font) for w in words]
-
-    def line_px(i, j):
-        return sum(ww[i:j]) + sp_w * max(0, j - i - 1)
-
-    def try_k(k):
-        if k > n or n < k * min_wpl:
-            return None
-        INF = float("inf")
-        dp  = [[INF] * (k + 1) for _ in range(n + 1)]
-        par = [[-1]  * (k + 1) for _ in range(n + 1)]
-        dp[0][0] = 0.0
-        for l in range(1, k + 1):
-            for j in range(l * min_wpl, n + 1):
-                if (n - j) < (k - l) * min_wpl:
-                    continue
-                for i in range((l - 1) * min_wpl, j - min_wpl + 1):
-                    if dp[i][l - 1] == INF:
-                        continue
-                    px = line_px(i, j)
-                    if px > max_w:
-                        continue
-                    cost = dp[i][l - 1] + px ** 2
-                    if cost < dp[j][l]:
-                        dp[j][l] = cost
-                        par[j][l] = i
-        if dp[n][k] == INF:
-            return None
-        segs, j, l = [], n, k
-        while l > 0:
-            i = par[j][l]
-            segs.append(" ".join(words[i:j]))
-            j, l = i, l - 1
-        segs.reverse()
-        return segs
-
-    max_k = max(1, -(-n // min_wpl))
-    for k in range(1, max_k + 1):
-        r = try_k(k)
-        if r is not None:
-            return r
-
-    # Hard-wrap fallback
-    lines, cur = [], []
-    for w in words:
-        cur.append(w)
-        if line_px(0, len(cur)) > max_w and len(cur) > 1:
-            lines.append(" ".join(cur[:-1]))
-            cur = [w]
-    lines.append(" ".join(cur))
-    return lines
-
-
-# ── PNG renderer ──────────────────────────────────────────────────────────────
-
-# Fixed style: white text, no border/shadow, black background baked into PNG
-_TEXT_COLOR   = (255, 255, 255, 255)
-_BG_COLOR     = (0, 0, 0, 255)
-
-def render_verse_png(text: str, size: tuple) -> Image.Image:
+    Unlike image.py's auto-height render, video needs every frame the same
+    fixed resolution so FFmpeg can concat them without rescaling.
+    """
+    from PIL import Image as PILImage, ImageDraw as PILDraw
+    from config import VIDEO_PADDING as PADDING, IMAGE_BACKGROUNDS, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
     W, H  = size
-    max_w = W - 2 * VIDEO_PADDING
+    max_w = W - 2 * PADDING
+    bg    = IMAGE_BACKGROUNDS.get(bg_key, IMAGE_BACKGROUNDS[IMAGE_DEFAULT_BG])
+    fg    = IMAGE_TEXT_COLORS.get(bg_key, IMAGE_TEXT_COLORS[IMAGE_DEFAULT_BG])
 
-    img  = Image.new("RGBA", size, _BG_COLOR)
-    draw = ImageDraw.Draw(img)
+    img  = PILImage.new("RGBA", size, bg)
+    draw = PILDraw.Draw(img)
 
-    fs           = VIDEO_FONT_SIZE
+    fs = 36
+    fs_min = 22
     chosen_lines = [text]
     chosen_fs    = fs
 
-    while fs >= VIDEO_MIN_FONT_SIZE:
-        font  = _font(fs)
-        lines = []
-        ok    = True
+    while fs >= fs_min:
+        font  = _font(font_key, fs)
+        lines, ok = [], True
         for para in text.split("\n"):
             pl = _wrap(draw, para.strip(), font, max_w)
             for line in pl:
                 if _text_w(draw, line, font) > max_w:
                     ok = False; break
-            if not ok:
-                break
+            if not ok: break
             lines.extend(pl)
         if ok:
             line_h = int(fs * 1.45)
-            if len(lines) * line_h <= H - 2 * VIDEO_PADDING:
+            if len(lines) * line_h <= H - 2 * PADDING:
                 chosen_lines = lines; chosen_fs = fs; break
-        next_fs = max(VIDEO_MIN_FONT_SIZE, int(fs * 0.88))
+        next_fs = max(fs_min, int(fs * 0.88))
         if next_fs == fs:
-            chosen_lines = _wrap(draw, text, _font(fs), max_w)
+            chosen_lines = _wrap(draw, text, _font(font_key, fs), max_w)
             chosen_fs    = fs; break
         fs = next_fs
 
-    font   = _font(chosen_fs)
-    line_h = int(chosen_fs * 1.45)
+    font    = _font(font_key, chosen_fs)
+    line_h  = int(chosen_fs * 1.45)
     total_h = len(chosen_lines) * line_h
     y       = (H - total_h) // 2
 
@@ -163,38 +82,30 @@ def render_verse_png(text: str, size: tuple) -> Image.Image:
             y += line_h; continue
         lw = _text_w(draw, line, font)
         x  = (W - lw) // 2
-        draw.text((x, y), line, font=font, fill=_TEXT_COLOR, direction="rtl")
+        draw.text((x, y), line, font=font, fill=fg, direction="rtl")
         y += line_h
 
+    del draw
     return img
 
 
-# ── Timing ────────────────────────────────────────────────────────────────────
+def _build_entries(verses_list: list, start_aya: int, verse_durations: list,
+                   sura: int = 0, font_key: str = "uthmani") -> list:
+    """Build timed text entries for video frames.
 
-def _to_arabic_numerals(n: int) -> str:
-    ar = "٠١٢٣٤٥٦٧٨٩"
-    return "".join(ar[int(d)] for d in str(n))
-
-def _clean_verse(text: str) -> str:
-    """Remove Quranic annotation marks that the display font cannot render.
-
-    Strips U+06D6–U+06ED: small high/low signs, pause marks (ۚ ۖ ۗ ۘ ۙ),
-    sajda mark, small waw ۥ, small ya ۦ, and similar marks.
-    These appear in Uthmani text and cause rendering artefacts with KFGQPC font.
-    Also removes the dagger alif U+0670 for the same reason.
+    Basmala is always stripped — not shown in video.
+    Font-conditional numbers: uthmani → Arabic-Indic (٣), others → western (3).
     """
-    text = re.sub(r'\u0670', '', text)          # dagger alif
-    text = re.sub(r'[\u06D6-\u06ED]', '', text)  # Quranic annotation marks
-    return text
-
-
-def _build_entries(verses_list, start_aya, verse_durations):
+    from .data import strip_basmala
     entries, t = [], 0.0
     for i, verse in enumerate(verses_list):
-        dur     = verse_durations[i]
-        aya_num = _to_arabic_numerals(start_aya + i)
-        cleaned = _clean_verse(verse)
-        entries.append({"text": f"{cleaned} {aya_num}", "start": t, "end": t + dur})
+        dur        = verse_durations[i]
+        aya_i      = start_aya + i
+        num        = to_number(aya_i, font_key)
+        stripped   = strip_basmala(verse, sura, aya_i) if sura else verse
+        cleaned    = _clean_verse(stripped)
+        frame_text = f"{cleaned} ({num})"
+        entries.append({"text": frame_text, "start": t, "end": t + dur})
         t += dur
     return entries
 
@@ -202,9 +113,9 @@ def _build_entries(verses_list, start_aya, verse_durations):
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
 
 def _run(cmd: list) -> None:
-    full = [FFMPEG_BIN, "-y"] + [str(x) for x in cmd]
+    full = [FFMPEG_BIN, "-y", "-threads", "2"] + [str(x) for x in cmd]
     logger.debug("ffmpeg: %s", " ".join(full))
-    r = subprocess.run(full, capture_output=True)
+    r = subprocess.run(full, capture_output=True, start_new_session=True)
     if r.returncode != 0:
         raise RuntimeError(r.stderr.decode(errors="replace"))
 
@@ -244,6 +155,8 @@ def gen_video(
     audio_path            = None,
     output_dir: Path      = None,
     ratio: str            = VIDEO_DEFAULT_RATIO,
+    bg_key: str           = VIDEO_DEFAULT_BG,
+    font_key: str         = VIDEO_DEFAULT_FONT,
     verse_durations: list = None,
     progress_cb           = None,
 ) -> Path:
@@ -264,7 +177,7 @@ def gen_video(
     size   = VIDEO_SIZES.get(ratio, VIDEO_SIZES[VIDEO_DEFAULT_RATIO])
     vw, vh = size
 
-    entries    = _build_entries(verses_list, start_aya, verse_durations)
+    entries    = _build_entries(verses_list, start_aya, verse_durations, sura=sura, font_key=font_key)
     text_total = entries[-1]["end"] if entries else 10.0
 
     audio_dur = None
@@ -292,9 +205,10 @@ def gen_video(
         pngs = []
         n    = len(entries)
         for idx, entry in enumerate(entries):
-            img = render_verse_png(text=entry["text"], size=size)
+            img = _render_frame(text=entry["text"], size=size, font_key=font_key, bg_key=bg_key)
             p   = tmp / f"verse_{idx:04d}.png"
             img.save(str(p))
+            img.close()          # free PIL memory immediately
             pngs.append((p, entry["end"] - entry["start"]))
             _progress(int(20 * (idx + 1) / n), f"frame {idx+1}/{n}")
 
@@ -341,9 +255,10 @@ def gen_video(
         # Text track input (looped)
         txt_inputs = ["-stream_loop", "-1", "-i", str(text_track)]
 
-        # Black background via lavfi color source
+        # Background via lavfi color source (user-configurable)
+        bg_hex = VIDEO_BACKGROUNDS.get(bg_key, VIDEO_BACKGROUNDS[VIDEO_DEFAULT_BG])
         filters = [
-            f"color=c=0x141414:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg]",
+            f"color=c={bg_hex}:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg]",
             (f"[0:v]"
              f"setpts=PTS+{sync}/TB,"
              f"trim=start=0:end={total_dur:.4f},"

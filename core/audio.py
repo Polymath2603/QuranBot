@@ -116,9 +116,14 @@ def gen_mp3(
 
 
 def _ffmpeg(args: list[str], stage: str) -> None:
-    """Run ffmpeg with the given argument list. Raises RuntimeError on failure."""
-    cmd    = [FFMPEG_BIN, "-y", "-loglevel", "error"] + args
-    result = subprocess.run(cmd, capture_output=True)
+    """Run ffmpeg with the given argument list. Raises RuntimeError on failure.
+
+    start_new_session=True puts ffmpeg in its own process group so a signal
+    sent to the bot process does not cascade to ffmpeg.
+    -threads 2 caps per-stream thread usage to reduce peak RAM.
+    """
+    cmd    = [FFMPEG_BIN, "-y", "-threads", "2", "-loglevel", "error"] + args
+    result = subprocess.run(cmd, capture_output=True, start_new_session=True)
     if result.returncode != 0:
         err = result.stderr.decode(errors="replace").strip()
         raise RuntimeError(f"FFmpeg {stage} failed: {err}")

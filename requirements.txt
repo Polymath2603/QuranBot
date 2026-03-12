@@ -1,6 +1,15 @@
+# Core
 python-telegram-bot[job-queue]>=21.3
 python-dotenv>=1.0.0
+
+# Database & ORM
 SQLAlchemy>=2.0.0
+
+# Arabic fuzzy matching (NLU sura name detection)
 rapidfuzz>=3.0.0
+
+# Image generation
 Pillow>=10.0.0
+
+# JSON5 (quran-data.json uses JS comment syntax)
 json5
