@@ -7,11 +7,24 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, InputMediaPhoto, Message
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, PreCheckoutQueryHandler, filters, ContextTypes,
 )
+
+def _patch_reply(func):
+    async def wrapper(*args, **kwargs):
+        kwargs.setdefault("reply_to_message_id", None)
+        kwargs.setdefault("do_quote", False)
+        return await func(*args, **kwargs)
+    return wrapper
+
+Message.reply_text = _patch_reply(Message.reply_text)
+Message.reply_photo = _patch_reply(Message.reply_photo)
+Message.reply_video = _patch_reply(Message.reply_video)
+Message.reply_audio = _patch_reply(Message.reply_audio)
+Message.reply_document = _patch_reply(Message.reply_document)
 from telegram.request import HTTPXRequest
 
 from config import (
@@ -604,7 +617,6 @@ async def _process_queue_item(bot, item_id: int):
         font_key   = params.get("font_key",   IMAGE_DEFAULT_FONT)
         bg_key     = params.get("bg_key",     IMAGE_DEFAULT_BG)
         resolution = params.get("resolution", DEFAULT_IMAGE_RESOLUTION)
-        reply_to   = params.get("reply_to_msg_id")
         fid_key    = img_fid_key(sura, start_aya, end_aya, font_key, bg_key, resolution)
         cached     = get_file_id(fid_key)
 
@@ -619,7 +631,6 @@ async def _process_queue_item(bot, item_id: int):
             sent    = await bot.send_photo(
                 chat_id=chat_id, photo=photo_src,
                 caption=caption, reply_markup=kb,
-                reply_to_message_id=reply_to,
             )
             if sent and sent.photo:
                 set_file_id(fid_key, sent.photo[-1].file_id)
@@ -787,7 +798,7 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.bot, user.telegram_id, update.effective_chat.id, "image",
         {"sura": sura, "start_aya": start_aya, "end_aya": end_aya,
          "title": title, "font_key": font_key, "bg_key": bg_key,
-         "resolution": resolution, "reply_to_msg_id": query.message.message_id},
+         "resolution": resolution},
         lang, status_msg_id=pos_msg.message_id,
     )
 

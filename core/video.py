@@ -41,7 +41,7 @@ def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
     from config import VIDEO_PADDING as PADDING, IMAGE_BACKGROUNDS, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
     W, H  = size
     max_w = W - 2 * PADDING
-    bg    = IMAGE_BACKGROUNDS.get(bg_key, IMAGE_BACKGROUNDS[IMAGE_DEFAULT_BG])
+    bg    = (0, 0, 0, 255)
     fg    = IMAGE_TEXT_COLORS.get(bg_key, IMAGE_TEXT_COLORS[IMAGE_DEFAULT_BG])
 
     img  = PILImage.new("RGBA", size, bg)
@@ -263,7 +263,8 @@ def gen_video(
              f"setpts=PTS+{sync}/TB,"
              f"trim=start=0:end={total_dur:.4f},"
              f"setpts=PTS-STARTPTS,"
-             f"scale={vw}:{vh},setsar=1[txt]"),
+             f"scale={vw}:{vh},setsar=1,"
+             f"colorkey=black:0.05:0.1[txt]"),
             f"[bg][txt]overlay=0:0:format=auto,trim=0:{total_dur:.4f},setpts=PTS-STARTPTS[vout]",
         ]
 
