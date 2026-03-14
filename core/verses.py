@@ -9,7 +9,7 @@ from .data import (
 )
 from .image import (
     gen_verse_image, to_arabic, to_number,
-    basmala_for_font, _BASMALA_GLYPH, _clean_verse,
+    basmala_for_font, BASMALA_GLYPH, clean_verse,
 )
 from .lang import t
 from .search import get_page
@@ -129,13 +129,13 @@ def _build_img_text(page_pairs: list, sura: int, font_key: str) -> str:
                 else:
                     basmala_line = raw
             else:
-                basmala_line = _BASMALA_GLYPH
+                basmala_line = BASMALA_GLYPH
 
-            cleaned = _clean_verse(body)
+            cleaned = clean_verse(body)
             if cleaned:
                 parts.append(f"{cleaned} ({num})")
         else:
-            cleaned = _clean_verse(replace_basmala_symbol(v, sura, i))
+            cleaned = clean_verse(replace_basmala_symbol(v, sura, i))
             parts.append(f"{cleaned} ({num})")
 
     body = " ".join(parts)
@@ -146,10 +146,11 @@ def _build_img_text(page_pairs: list, sura: int, font_key: str) -> str:
 
 # ── Image page nav keyboard ───────────────────────────────────────────────────
 
-def _img_keyboard(sura, start, end, lang) -> InlineKeyboardMarkup:
+def build_img_keyboard(sura, start, end, lang) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t("back", lang), callback_data=f"verse_back_{sura}_{start}_{end}")],
     ])
+
 
 
 # ── Image send / edit ─────────────────────────────────────────────────────────
@@ -168,7 +169,8 @@ async def send_img_page(
     """
     img_text = _build_img_text(raw_pairs, sura, font_key)
     caption  = f"📖 {title}"
-    kb       = _img_keyboard(sura, start, end, lang)
+    kb       = build_img_keyboard(sura, start, end, lang)
+
     photo    = cached_fid
     bio      = None
 

@@ -1,8 +1,10 @@
 """
 database.py — SQLAlchemy models and session management for QBot.
 """
-from sqlalchemy import create_engine, Column, Integer, String, JSON, DateTime, Text
+from sqlalchemy import Column, Integer, String, JSON, DateTime, Text, select
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_scoped_session
+from asyncio import current_task
 from datetime import datetime, timezone
 from config import DATA_DIR
 
@@ -59,65 +61,70 @@ class BotStats(Base):
     stars_donations         = Column(Integer, default=0)   # successful Stars payments
 
 
-def get_stats(session) -> "BotStats":
+async def get_stats(session) -> "BotStats":
     """Fetch (or create) the singleton stats row."""
-    row = session.query(BotStats).filter_by(id=1).first()
+    result = await session.execute(select(BotStats).filter_by(id=1))
+    row = result.scalars().first()
     if not row:
         row = BotStats(id=1)
         session.add(row)
-        session.commit()
+        await session.commit()
     return row
 
 
-def increment_stat(field: str, amount: int = 1) -> None:
+async def increment_stat(field: str, amount: int = 1) -> None:
     """Atomically increment a BotStats counter field."""
     session = get_session()
     try:
-        row = get_stats(session)
+        row = await get_stats(session)
         setattr(row, field, (getattr(row, field) or 0) + amount)
-        session.commit()
+        await session.commit()
     finally:
-        session.close()
+        await session.close()
 
 
-engine  = create_engine(f"sqlite:///{DB_PATH}", echo=False)
-Session = sessionmaker(bind=engine)
+engine = create_async_engine(f"sqlite+aiosqlite:///{DB_PATH}", echo=False)
+async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+AsyncScopedSession = async_scoped_session(async_session_factory, scopefunc=current_task)
 
 
-def init_db() -> None:
+async def init_db() -> None:
     # Import queue model here to ensure its table is created
     from core.queue import QueueItem  # noqa: F401
-    Base.metadata.create_all(engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-def get_session():
-    return Session()
+def get_session() -> AsyncSession:
+    return AsyncScopedSession()
 
 
 # ---------------------------------------------------------------------------
 # User helpers (moved from bot.py)
 # ---------------------------------------------------------------------------
 
-def get_db_user(telegram_user) -> User:
+async def get_db_user(telegram_user) -> User:
     """Fetch or create a User record for the given Telegram user."""
     session = get_session()
-    user = session.query(User).filter_by(telegram_id=telegram_user.id).first()
+    result = await session.execute(select(User).filter_by(telegram_id=telegram_user.id))
+    user = result.scalars().first()
     if not user:
         user = User(telegram_id=telegram_user.id, language="ar")
         session.add(user)
-        session.commit()
-    session.refresh(user)
+        await session.commit()
+    await session.refresh(user)
     session.expunge(user)
-    session.close()
+    await session.close()
     return user
 
 
-def update_user_field(telegram_id: int, **fields) -> None:
+async def update_user_field(telegram_id: int, **fields) -> None:
     """Update one or more fields on a User record in a single session."""
     session = get_session()
-    user = session.query(User).filter_by(telegram_id=telegram_id).first()
+    result = await session.execute(select(User).filter_by(telegram_id=telegram_id))
+    user = result.scalars().first()
     if user:
         for key, value in fields.items():
             setattr(user, key, value)
-        session.commit()
-    session.close()
+        await session.commit()
+    await session.close()

@@ -82,12 +82,9 @@ def _mushaf_kb(page: int, lang: str, source: str) -> InlineKeyboardMarkup:
 
 async def send_mushaf_page(
     query,
-    bot,
     page_num:  int,
     source:    str,
     lang:      str,
-    *,
-    is_edit:   bool = False,
 ) -> None:
     """Send or edit a mushaf page image.
 
@@ -122,7 +119,7 @@ async def send_mushaf_page(
         # Image file not available — inform user
         notice = t("mushaf_not_available", lang, page=page_num, source=src_name)
         try:
-            await query.edit_message_text(notice, reply_markup=kb)
+            await query.answer(text=notice, show_alert=True)
         except Exception:
             await query.message.reply_text(notice, reply_markup=kb)
         return

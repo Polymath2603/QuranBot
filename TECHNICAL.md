@@ -79,9 +79,9 @@ Image button is hidden when the verse text exceeds `CHAR_LIMIT` characters.
 
 ### Queue & Cancelling
 
-`core/queue.py` runs a **single consumer task** — one job at a time across audio, video, and image. Jobs are stored in SQLite so they survive restarts. Status message is edited with progress (`▰▱▱▱▱ 20%`), then deleted on completion. Users can manually click `❌ Cancel` while the item is pending to strip it from the queue organically without backend interrupts.
+`core/queue.py` runs a **single consumer task** — one job at a time across audio, video, and image. Jobs are stored in SQLite so they survive restarts. Status message is edited with progress (`▰▱▱▱▱ 20%`), then deleted on completion. Users can manually click `❌ Cancel` while the item is pending to strip it from the queue.
 
-Errors caught during queue FFmpeg runtimes securely edit the in-place processing message to `❌` to prevent sending unlinked python stack trace strings to end-users. Admin users can clear queues with `/cancelall`.
+Background tasks are wrapped in `_safe_process_queue_item()` which captures exceptions and marks the database record as `error`, updating the status message to `❌` for visibility. Admin users can clear queues with `/cancelall`.
 
 ### File-ID key format
 
@@ -125,7 +125,8 @@ gen_video():
   1. Render each verse as PNG frame (_render_frame — solid black background #000000)
   2. Encode each PNG → verse clip with fade-in/out (FFmpeg: libx264 ultrafast)
   3. Concat clips → silent text track (concat demuxer, -c:v copy)
-  4. Final pass: real background (e.g. parchment) + text track + audio → output MP4 applying colorkey=black:0.05:0.1 to text track to eliminate fading bleed-through.
+  4. Final pass: real background (e.g. parchment) + text track + audio → output MP4 applying colorkey=black:0.05:0.1.
+  - HW Acceleration: Auto-detects NVENC (NVIDIA), VAAPI (Linux), or VideoToolbox (macOS) for the final composite pass (-c:v).
   -threads 2 throughout; minimal RAM footprint
 ```
 

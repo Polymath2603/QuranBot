@@ -88,3 +88,52 @@ def get_page(quran_data: dict, sura: int, aya: int) -> int:
         if p_sura > sura or (p_sura == sura and p_aya > aya):
             return page_num - 2
     return 604
+
+
+def make_snippet(verse: str, query: str, context_words: int = 4) -> str:
+    """Return the matching phrase with `context_words` words on each side.
+
+    Uses a word-index approach:
+      1. Split verse into words; build a parallel list of normalized words.
+      2. Join normalized words into a full string and find the query match.
+      3. Walk the word boundaries to find which word indices cover the match.
+      4. Return the corresponding original words plus context on each side.
+    """
+    norm_verse = normalize_arabic(verse)
+    norm_query = normalize_arabic(query)
+    if not norm_query or norm_query not in norm_verse:
+        return verse[:120] + ("…" if len(verse) > 120 else "")
+
+    orig_words = verse.split()
+    norm_words = [normalize_arabic(w) for w in orig_words]
+
+    # Build a joined string from norm_words with single spaces (mirrors norm_verse structure)
+    joined_norm = " ".join(norm_words)
+
+    # Find match span in joined_norm
+    match_start = joined_norm.find(norm_query)
+    if match_start == -1:
+        return verse[:120] + ("…" if len(verse) > 120 else "")
+    match_end = match_start + len(norm_query)
+
+    # Map character positions in joined_norm → word indices
+    char_to_word: list[int] = []
+    for wi, nw in enumerate(norm_words):
+        for _ in nw:
+            char_to_word.append(wi)
+        if wi < len(norm_words) - 1:
+            char_to_word.append(wi)  # the space character between words
+
+    # Find word index range that covers the match
+    first_word = char_to_word[match_start] if match_start < len(char_to_word) else 0
+    last_word  = char_to_word[min(match_end - 1, len(char_to_word) - 1)]
+
+    # Context slices
+    left_start  = max(0, first_word - context_words)
+    right_end   = min(len(orig_words), last_word + context_words + 1)
+
+    prefix = ("…" if left_start > 0 else "")
+    suffix = ("…" if right_end < len(orig_words) else "")
+
+    chunk = " ".join(orig_words[left_start:right_end])
+    return prefix + chunk + suffix

@@ -21,14 +21,52 @@ from pathlib import Path
 from config import (
     VIDEO_FPS, VIDEO_FADE_DURATION, VIDEO_SYNC_OFFSET,
     VIDEO_SIZES, VIDEO_DEFAULT_RATIO,
-    IMAGE_DEFAULT_FONT, VIDEO_DEFAULT_FONT, VIDEO_DEFAULT_BG, VIDEO_BACKGROUNDS,
+    VIDEO_DEFAULT_FONT, VIDEO_DEFAULT_BG,
     FFMPEG_BIN, FFPROBE_BIN,
 )
-from .image import _font, _wrap, _text_w, _clean_verse, to_arabic, to_number
+from .image import get_font, wrap_text, get_text_width, clean_verse, to_number
 
 logger = logging.getLogger(__name__)
 
 _VIDEO_TEXT_COLOR = (255, 255, 255, 255)
+
+
+def _detect_hw_encoder() -> tuple[str, list[str]]:
+    """Probe available hardware H.264 encoders in priority order.
+
+    Returns (encoder_name, extra_args) so the caller can swap in
+    ``-c:v encoder_name *extra_args`` for the final output pass.
+
+    Priority:
+      1. h264_nvenc  — NVIDIA (CUDA)
+      2. h264_vaapi  — Intel/AMD (VAAPI, Linux)
+      3. h264_videotoolbox — Apple Silicon / macOS
+      4. libx264     — software fallback (always available)
+    """
+    candidates = [
+        ("h264_nvenc",        ["-preset", "p4", "-rc", "vbr", "-cq", "23"]),
+        ("h264_vaapi",        ["-vf", "format=nv12,hwupload", "-rc_mode", "CQP", "-global_quality", "23"]),
+        ("h264_videotoolbox", ["-q:v", "65"]),
+    ]
+    import subprocess as _sp
+    for enc, extra in candidates:
+        try:
+            r = _sp.run(
+                [FFMPEG_BIN, "-hide_banner", "-loglevel", "error",
+                 "-f", "lavfi", "-i", "color=black:size=16x16:rate=1:duration=0.1",
+                 "-frames:v", "1", "-c:v", enc, "-f", "null", "-"],
+                capture_output=True, timeout=10,
+            )
+            if r.returncode == 0:
+                logger.info("HW encoder selected: %s", enc)
+                return enc, extra
+        except Exception:
+            continue
+    return "libx264", ["-preset", "fast", "-crf", "23"]
+
+
+# Detected once at module load (thread-safe: GIL + read-only after init)
+_HW_ENC, _HW_ENC_ARGS = _detect_hw_encoder()
 
 
 def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
@@ -38,51 +76,63 @@ def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
     fixed resolution so FFmpeg can concat them without rescaling.
     """
     from PIL import Image as PILImage, ImageDraw as PILDraw
-    from config import VIDEO_PADDING as PADDING, IMAGE_BACKGROUNDS, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
-    W, H  = size
-    max_w = W - 2 * PADDING
-    bg    = (0, 0, 0, 255)
+    from config import VIDEO_PADDING as PADDING, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
+    fixed_w, fixed_h  = size
+    max_w = fixed_w - 2 * PADDING
+    max_h = fixed_h - 2 * PADDING
+    bg    = (0, 0, 0, 0)
     fg    = IMAGE_TEXT_COLORS.get(bg_key, IMAGE_TEXT_COLORS[IMAGE_DEFAULT_BG])
 
     img  = PILImage.new("RGBA", size, bg)
     draw = PILDraw.Draw(img)
 
-    fs = 36
-    fs_min = 22
-    chosen_lines = [text]
-    chosen_fs    = fs
+    fs = 38
+    chosen_lines = []
+    chosen_fs    = 38
 
-    while fs >= fs_min:
-        font  = _font(font_key, fs)
+    # Find largest font size that fits width
+    while fs >= 24:
+        # Create a dummy ImageDraw object for text measurement
+        probe = PILImage.new("RGBA", (1, 1))
+        draw_probe  = PILDraw.Draw(probe)
+        font  = get_font(font_key, fs)
         lines, ok = [], True
         for para in text.split("\n"):
-            pl = _wrap(draw, para.strip(), font, max_w)
+            pl = wrap_text(draw_probe, para.strip(), font, max_w)
             for line in pl:
-                if _text_w(draw, line, font) > max_w:
+                if get_text_width(draw_probe, line, font) > max_w:
                     ok = False; break
             if not ok: break
             lines.extend(pl)
         if ok:
             line_h = int(fs * 1.45)
-            if len(lines) * line_h <= H - 2 * PADDING:
-                chosen_lines = lines; chosen_fs = fs; break
-        next_fs = max(fs_min, int(fs * 0.88))
-        if next_fs == fs:
-            chosen_lines = _wrap(draw, text, _font(font_key, fs), max_w)
-            chosen_fs    = fs; break
-        fs = next_fs
+            if len(lines) * line_h <= max_h:
+                chosen_lines = lines
+                chosen_fs = fs
+                break
+        # Try a slightly smaller font size next
+        fs -= 2
 
-    font    = _font(font_key, chosen_fs)
+    # If no font size fits, use the smallest and let it overflow
+    if not chosen_lines:
+        fs = 24
+        font = get_font(font_key, fs)
+        probe = PILImage.new("RGBA", (1, 1))
+        draw_probe  = PILDraw.Draw(probe)
+        chosen_lines = wrap_text(draw_probe, text, font, max_w)
+        chosen_fs = fs
+
+    font    = get_font(font_key, chosen_fs)
     line_h  = int(chosen_fs * 1.45)
     total_h = len(chosen_lines) * line_h
-    y       = (H - total_h) // 2
+    y       = (fixed_h - total_h) // 2
 
-    for line in chosen_lines:
-        if not line.strip():
+    for ln in chosen_lines:
+        if not ln.strip():
             y += line_h; continue
-        lw = _text_w(draw, line, font)
-        x  = (W - lw) // 2
-        draw.text((x, y), line, font=font, fill=fg, direction="rtl")
+        lw = get_text_width(draw, ln, font)
+        x  = (fixed_w - lw) // 2
+        draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
         y += line_h
 
     del draw
@@ -103,11 +153,15 @@ def _build_entries(verses_list: list, start_aya: int, verse_durations: list,
         aya_i      = start_aya + i
         num        = to_number(aya_i, font_key)
         stripped   = strip_basmala(verse, sura, aya_i) if sura else verse
-        cleaned    = _clean_verse(stripped)
+        # clean_verse removes Dagger Alif and Quranic pause/annotation marks
+        # to ensure a cleaner visual appearance in video frames.
+        cleaned    = clean_verse(stripped)
         frame_text = f"{cleaned} ({num})"
         entries.append({"text": frame_text, "start": t, "end": t + dur})
         t += dur
     return entries
+
+# Unused: _build_video_subtitle_text
 
 
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
@@ -149,16 +203,15 @@ def _out_filename(voice, sura, range_start, range_end, ratio, bg_key, font_key) 
 def gen_video(
     verses_list: list,
     start_aya: int,
-    title: str,
     sura: int,
     voice: str            = "",
     audio_path            = None,
-    output_dir: Path      = None,
-    ratio: str            = VIDEO_DEFAULT_RATIO,
-    bg_key: str           = VIDEO_DEFAULT_BG,
-    font_key: str         = VIDEO_DEFAULT_FONT,
-    verse_durations: list = None,
-    progress_cb           = None,
+    output_dir: Path | None = None,
+    ratio: str              = VIDEO_DEFAULT_RATIO,
+    bg_key: str             = VIDEO_DEFAULT_BG,
+    font_key: str           = VIDEO_DEFAULT_FONT,
+    verse_durations: list   = None,
+    progress_cb             = None,
 ) -> Path:
     """
     Generate a video for the given verses.
@@ -216,21 +269,21 @@ def gen_video(
         half = VIDEO_FADE_DURATION / 2.0
         segs = []
         for idx, (png, dur) in enumerate(pngs):
-            seg = tmp / f"seg_{idx:04d}.mp4"
+            seg = tmp / f"seg_{idx:04d}.mov"
             fi  = min(half, dur * 0.4)
             fo  = min(half, dur * 0.4)
             fo_start = max(0.0, dur - fo)
             vf = (
-                f"fade=t=in:st=0:d={fi:.4f}:alpha=0,"
-                f"fade=t=out:st={fo_start:.4f}:d={fo:.4f}:alpha=0"
+                f"fade=t=in:st=0:d={fi:.4f}:alpha=1,"
+                f"fade=t=out:st={fo_start:.4f}:d={fo:.4f}:alpha=1"
             )
             _run([
                 "-loop", "1", "-i", str(png),
                 "-vf", vf,
                 "-t", str(dur),
                 "-r", str(VIDEO_FPS),
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
-                "-pix_fmt", "yuv420p", "-an",
+                "-c:v", "qtrle",
+                "-pix_fmt", "argb", "-an",
                 str(seg),
             ])
             segs.append(seg)
@@ -240,7 +293,7 @@ def gen_video(
         _progress(60, "concatenating…")
         concat_txt = tmp / "concat.txt"
         concat_txt.write_text("\n".join(f"file '{s}'" for s in segs), encoding="utf-8")
-        text_track = tmp / "text_track.mp4"
+        text_track = tmp / "text_track.mov"
         _run([
             "-f", "concat", "-safe", "0", "-i", str(concat_txt),
             "-c:v", "copy", "-an",
@@ -251,11 +304,9 @@ def gen_video(
         _progress(70, "compositing…")
 
         sync = VIDEO_SYNC_OFFSET
-
-        # Text track input (looped)
         txt_inputs = ["-stream_loop", "-1", "-i", str(text_track)]
-
-        # Background via lavfi color source (user-configurable)
+        
+        from config import VIDEO_BACKGROUNDS
         bg_hex = VIDEO_BACKGROUNDS.get(bg_key, VIDEO_BACKGROUNDS[VIDEO_DEFAULT_BG])
         filters = [
             f"color=c={bg_hex}:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg]",
@@ -263,8 +314,7 @@ def gen_video(
              f"setpts=PTS+{sync}/TB,"
              f"trim=start=0:end={total_dur:.4f},"
              f"setpts=PTS-STARTPTS,"
-             f"scale={vw}:{vh},setsar=1,"
-             f"colorkey=black:0.05:0.1[txt]"),
+             f"scale={vw}:{vh},setsar=1[txt]"),
             f"[bg][txt]overlay=0:0:format=auto,trim=0:{total_dur:.4f},setpts=PTS-STARTPTS[vout]",
         ]
 
@@ -277,7 +327,7 @@ def gen_video(
                 "-filter_complex", "; ".join(filters),
                 "-map", "[vout]",
                 "-map", "1:a",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+                "-c:v", _HW_ENC, *_HW_ENC_ARGS, "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "128k",
                 "-t", str(total_dur),
                 str(out_path),
@@ -287,7 +337,7 @@ def gen_video(
                 *txt_inputs,
                 "-filter_complex", "; ".join(filters),
                 "-map", "[vout]",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+                "-c:v", _HW_ENC, *_HW_ENC_ARGS, "-pix_fmt", "yuv420p",
                 "-t", str(total_dur),
                 str(out_path),
             ])

@@ -2,6 +2,27 @@
 
 ---
 
+## 🟢 2026-03-14 — Visual Consistency & System Stability
+
+### ✨ Added
+- **Hardware Acceleration** — FFmpeg now auto-detects and uses hardware encoders (NVENC for NVIDIA, VAAPI for Linux, VideoToolbox for macOS) for dramatically faster video rendering.
+- **Search Context Snippets** — Search results now display the matching word with surrounding words for better context, instead of just the first few words of the verse.
+- **Safe Queue Processor** — Implemented a robust error-handling wrapper for background tasks to ensure the bot remains stable even if a specific generation job fails.
+
+### 🔄 Changed
+- **Unified Quran Text** — All visual generation (Images, Videos) and text responses now exclusively use the high-quality Uthmani script (`quran-uthmani.txt`) for total visual consistency.
+- **Regrouped Settings Menu** — Simplified the main settings menu into four categories: Language, Reciter, Media (Image/Video), and a "More" sub-menu for advanced options (Tafsir, Mushaf, Text Format).
+- **Admin Panel Cleanup** — Removed noisy user statistics (top reciters, language breakdown) to focus on operational health, queue status, and system resources.
+
+### 🧹 Removed
+- **Unused Code** — Stripped dozens of unused imports and dead variables from `bot.py` to improve maintainability and performance.
+
+### 🐛 Fixed
+- **Queue Persistence** — Improved cancellation tracking across bot restarts to prevent orphaned tasks in the database.
+- **Verse Boundary Checks** — Fixed edge cases in the search result handler where verse numbers could exceed sura limits.
+
+---
+
 ## 🟢 2026-03-14 — Queue Administration, CLI Export & Pipeline Polish
 
 ### ✨ Added

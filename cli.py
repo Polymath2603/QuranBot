@@ -9,7 +9,6 @@ Usage:
   python3 cli.py 18:1-10 -a --reciter Alafasy_64kbps
 """
 
-import sys
 import argparse
 import asyncio
 from pathlib import Path
@@ -75,7 +74,7 @@ async def async_main():
     base_idx = get_sura_start_index(q_data, sura)
     for aya in range(start, end + 1):
         idx = base_idx + aya - 1
-        if idx is not None and idx < len(txt):
+        if idx < len(txt):
             verses.append(txt[idx])
             
     if not verses:
