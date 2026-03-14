@@ -2,6 +2,34 @@
 
 ---
 
+## 🟢 2026-03-14 — Queue Administration, CLI Export & Pipeline Polish
+
+### ✨ Added
+
+- **Simple Export CLI (`cli.py`)** — New command-line tool to generate verse audio, images, and videos directly from the terminal. Supports theme/font overrides and custom output paths.
+- **Admin Cancel All** — Added `/cancelall` command for administrators to flush the entire system queue.
+- **Individual Cancellation** — Added a "Cancel" button to the active generation progress message, allowing users to abort their own requests mid-queue.
+- **Future Roadmap** — Created `TODO.md` to track planned UI/UX, performance, and feature enhancements.
+
+### 🐛 Fixed
+
+- **Text Fading in Generated Video** — Improved video rendering by using a solid black background pass followed by a colorkey filter, ensuring text and background themes blend without visual artifacts.
+- **Python-Telegram-Bot Compatibility** — Monkey-patched `Message` methods to resolve `TypeError` issues caused by incorrect `reply_to_message_id` handling in newer library versions.
+- **Hardcoded Emojis in Locales** — Stripped UI symbols (like ⚙️) from `ar.json` and `en.json` to improve RTL compatibility; symbols are now managed dynamically in code.
+- **Error Privacy** — Technical stack traces are now masked from users, replaced with a generic localized error message while logging the full trace for debugging.
+- **Queue Error UX** — Generation errors now update the existing progress message (❌) instead of sending a new unlinked message.
+- **Git Hygiene** — Updated `.gitignore` to properly exclude generated outputs and database files while preserving core data assets.
+
+### 🔄 Changed
+
+- **Visual Defaults** — Default theme for both images and videos is now `"parchment"` (paper-like aesthetic).
+- **Cache Persistence** — Upgraded cache storage IDs and filenames to include theme, font, and aspect ratio, preventing cache collisions when visual settings change.
+- **Increased Timeouts** — Network and download timeouts significantly increased to handle large video composites and slow API responses more reliably.
+- **Start Command** — Removed redundant usage counters from the `/start` handler to streamline database operations.
+- **Documentation** — Refreshed `README.md`, `README.en.md`, and `TECHNICAL.md` with new features and architecture details.
+
+---
+
 ## 🟢 2026-03-12 — Bug fixes & UX corrections
 
 ### 🐛 Fixed
@@ -71,14 +99,7 @@
 - `core/image.py`: `upload_to_cdn()`, `_img_cache_key()`.
 - `img` removed from text format cycle.
 
-## 🟢 2026-03-01 — Current
-
-- changelog not updated yet
-- neither are documents
-- all documents might include outdated information currently
-- it's 2AM so i won't update it now
-- i updated the code but not the documents
-- wait next commit, maybe tomorrow or next week
+---
 
 ## 🟢 2026-02-28 — Latest changelog update
 

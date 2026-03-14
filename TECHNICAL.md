@@ -8,11 +8,11 @@
 
 ```
 QuranBot/
-├── bot.py              # All Telegram handlers + callback router
+├── bot.py              # All Telegram handlers, callback router & monkey-patching
 ├── config.py           # Every constant in one place — edit here, not in modules
 ├── core/
 │   ├── audio.py        # gen_mp3(): download per-verse MP3s → FFmpeg concat + strip
-│   ├── video.py        # gen_video(): Pillow PNGs → 3-pass FFmpeg pipeline
+│   ├── video.py        # gen_video(): Pillow PNGs → 3-pass FFmpeg pipeline (black -> colorkey)
 │   ├── image.py        # gen_verse_image(): portrait (default) PNG, font/theme/resolution
 │   ├── mushaf.py       # send_mushaf_page(): local PNG → file_id cache → Telegram
 │   ├── verses.py       # build_verse_keyboard(), send helpers, text formatting
@@ -23,7 +23,7 @@ QuranBot/
 │   ├── data.py         # load_quran_data/text(), basmala helpers, index lookups
 │   ├── downloader.py   # Per-verse MP3 downloader with retry
 │   ├── database.py     # SQLAlchemy models: User, TafsirCache, BotStats, QueueItem
-│   ├── queue.py        # Serial request queue: SQLite-backed, one task at a time
+│   ├── queue.py        # Serial request queue: SQLite-backed, async cancelling `/cancelall`
 │   ├── hadith.py       # Random hadith from local SQLite DBs (uses config.HADITH_FILES)
 │   ├── lang.py         # t(key, lang, **kwargs) — loads ar.json + en.json
 │   └── utils.py        # Storage purge, rate limiter, file_id cache, log_error
@@ -77,9 +77,11 @@ Keyboard buttons:
 
 Image button is hidden when the verse text exceeds `CHAR_LIMIT` characters.
 
-### Queue
+### Queue & Cancelling
 
-`core/queue.py` runs a **single consumer task** — one job at a time across audio, video, and image. Jobs are stored in SQLite so they survive restarts. Status message is edited with progress, then deleted on completion.
+`core/queue.py` runs a **single consumer task** — one job at a time across audio, video, and image. Jobs are stored in SQLite so they survive restarts. Status message is edited with progress (`▰▱▱▱▱ 20%`), then deleted on completion. Users can manually click `❌ Cancel` while the item is pending to strip it from the queue organically without backend interrupts.
+
+Errors caught during queue FFmpeg runtimes securely edit the in-place processing message to `❌` to prevent sending unlinked python stack trace strings to end-users. Admin users can clear queues with `/cancelall`.
 
 ### File-ID key format
 
@@ -120,10 +122,10 @@ No image generation for mushaf pages. Not affected by text format settings.
 
 ```
 gen_video():
-  1. Render each verse as PNG frame (_render_frame — fixed size, same as VIDEO_SIZES)
+  1. Render each verse as PNG frame (_render_frame — solid black background #000000)
   2. Encode each PNG → verse clip with fade-in/out (FFmpeg: libx264 ultrafast)
   3. Concat clips → silent text track (concat demuxer, -c:v copy)
-  4. Final pass: background + text track + audio → output MP4
+  4. Final pass: real background (e.g. parchment) + text track + audio → output MP4 applying colorkey=black:0.05:0.1 to text track to eliminate fading bleed-through.
   -threads 2 throughout; minimal RAM footprint
 ```
 

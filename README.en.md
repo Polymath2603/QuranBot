@@ -120,8 +120,22 @@ The bot caches Telegram file\_ids in `ids.json` automatically after the first se
 data/tafsir/muyassar.json   {"1:1": "tafsir text", ...}
 data/tafsir/jalalayn.json
 ```
+If they don't exist, the bot falls back to the alquran.cloud API.
 
-Falls back to alquran.cloud API if not present.
+### Quick Export (CLI)
+
+You can now export verses as audio, image, or video directly from the command line without running the Telegram bot:
+
+```bash
+# Export video (aya range, with theme and font override)
+python3 cli.py 2:255 -v --theme parchment --font uthmani --output out.mp4
+
+# Export image (Al-Fatihah full)
+python3 cli.py 1:1-7 -i --theme dark --output fatiha.png
+
+# Export audio (Alafasy reciter)
+python3 cli.py 18:1-10 -a --reciter Alafasy_64kbps
+```
 
 ---
 

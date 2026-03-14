@@ -132,6 +132,21 @@ data/tafsir/jalalayn.json
 
 إن لم تكن موجودة، يُرجع البوت إلى alquran.cloud API.
 
+### التصدير السريع (CLI Export)
+
+يمكنك الآن تصدير الآيات كصوت، صورة، أو فيديو مباشرة من سطر الأوامر دون تشغيل البوت:
+
+```bash
+# تصدير فيديو (نطاق آيات، مع الخلفية والخط)
+python3 cli.py 2:255 -v --theme parchment --font uthmani --output out.mp4
+
+# تصدير صورة (سورة الفاتحة)
+python3 cli.py 1:1-7 -i --theme dark --output fatiha.png
+
+# تصدير صوت (بصوت العفاسي)
+python3 cli.py 18:1-10 -a --reciter Alafasy_64kbps
+```
+
 ---
 
 ## الدعم

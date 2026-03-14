@@ -647,13 +647,32 @@ async def _process_queue_item(bot, item_id: int):
             bio = BytesIO(png); bio.name = "verse.png"
             await _do_send(bio)
 
-    # Mark done
+    # Mark done or handle error
     session = get_session()
     db_item = session.query(QueueItem).filter_by(id=item_id).first()
     if db_item:
-        db_item.status = "done"
+        if db_item.status == "processing":
+            db_item.status = "done"
         session.commit()
     session.close()
+
+
+async def _safe_process_queue_item(bot, item_id: int):
+    try:
+        await _process_queue_item(bot, item_id)
+    except Exception as e:
+        logger.error(f"Queue processor error for item {item_id}: {e}", exc_info=True)
+        session = get_session()
+        db_item = session.query(QueueItem).filter_by(id=item_id).first()
+        if db_item:
+            msg_id = db_item.status_msg_id
+            chat_id = db_item.chat_id
+            db_item.status = "error"
+            session.commit()
+            if msg_id:
+                try: await bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="❌")
+                except Exception: pass
+        session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1003,6 +1022,33 @@ async def mushaf_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+# Start handler
+# ---------------------------------------------------------------------------
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = None
+    if update.callback_query:
+        query = update.callback_query
+        try: await query.answer()
+        except: pass
+
+    user = get_db_user(update.effective_user)
+    lang = user.language
+    from core.verses import build_main_keyboard
+    kb   = build_main_keyboard(lang)
+
+    if query and query.message.photo:
+        try: await query.message.delete()
+        except Exception: pass
+        await update.effective_message.reply_text(t("welcome", lang), reply_markup=kb)
+    elif query:
+        try: await query.edit_message_text(t("welcome", lang), reply_markup=kb)
+        except Exception: await update.effective_message.reply_text(t("welcome", lang), reply_markup=kb)
+    else:
+        await update.message.reply_text(t("welcome", lang), reply_markup=kb)
+
+
+# ---------------------------------------------------------------------------
 # Page handler (NLU: "page N") — always mushaf image
 # ---------------------------------------------------------------------------
 
@@ -1220,10 +1266,37 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     if limited_count: lines.append(t("admin_rate_limited", lang, count=limited_count))
     lines += ["", t("admin_top_voices", lang)]
+    voice_text = ""
     for voice_code, cnt in top_voices_raw:
         info  = VOICES.get(voice_code or DEFAULT_VOICE, {"en": voice_code})
-        lines.append(f"  • {info.get(lang, info.get('en', voice_code))}: {cnt}")
-    await update.message.reply_text("\n".join(lines))
+        voice_text += f"  • {info.get(lang, info.get('en', voice_code))}: {cnt}\n"
+
+    await update.message.reply_text(
+        f"{t('admin_title', lang)}\n\n"
+        f"{t('admin_users', lang, count=total_users)}\n"
+        f"  🇸🇦 {ar_users}  🌐 {en_users}\n"
+        f"{t('admin_queue', lang, pending=pending_q)}\n"
+        f"  ✅ {t('done', lang)}: {done_q}\n\n"
+        f"{t('admin_gen_audio', lang, count=bstats.generated_audio or 0)}\n"
+        f"{t('admin_gen_video', lang, count=bstats.generated_video or 0)}\n"
+        f"{t('admin_had_personal', lang, count=bstats.hadiths_sent_personal or 0)}\n"
+        f"{t('admin_had_channel', lang, count=bstats.hadiths_sent_channel or 0)}\n"
+        f"⭐ {t('admin_stars_donated', lang, count=bstats.stars_donations or 0)}\n\n"
+        f"{t('admin_disk', lang, free_mb=round(free_mb, 1))}\n"
+        f"{t('admin_cache', lang, count=cache_size)}\n"
+        f"{t('admin_cached_files', lang, count=cached_files)}\n"
+        f"\n{t('admin_top_voices', lang)}\n{voice_text}"
+        f"\n\nAdmin commands:\n/cancelall - Cancel all pending items in the queue"
+    )
+
+async def admin_cancel_all_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_db_user(update.effective_user)
+    lang = user.language
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text(t("admin_not_allowed", lang)); return
+
+    count = await request_queue.cancel_all()
+    await update.message.reply_text(f"✅ Cancelled {count} pending queue items.")
 
 async def hadith_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_db_user(update.effective_user)
@@ -1389,10 +1462,11 @@ def main():
         .build()
     )
     app.add_error_handler(error_handler)
-    app.add_handler(CommandHandler("start",    start))
-    app.add_handler(CommandHandler("help",     help_handler))
+    app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("help", help_handler))
+    app.add_handler(CommandHandler("admin", admin_handler))
+    app.add_handler(CommandHandler("cancelall", admin_cancel_all_handler))
     app.add_handler(CommandHandler("feedback", feedback_handler))
-    app.add_handler(CommandHandler("admin",    admin_handler))
     app.add_handler(CommandHandler("hadith",   hadith_handler))
     app.add_handler(CommandHandler("chadith",  chadith_handler))
     app.add_handler(CallbackQueryHandler(callback_router))

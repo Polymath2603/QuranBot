@@ -38,12 +38,12 @@ FFMPEG_BIN  = _find_bin("ffmpeg")
 FFPROBE_BIN = _find_bin("ffprobe")
 
 # ── HTTP / network ────────────────────────────────────────────────────────────
-HTTP_CONNECT_TIMEOUT = 20
-HTTP_READ_TIMEOUT    = 90
-HTTP_WRITE_TIMEOUT   = 90
+HTTP_CONNECT_TIMEOUT = 30
+HTTP_READ_TIMEOUT    = 180
+HTTP_WRITE_TIMEOUT   = 180
 HTTP_POOL_SIZE       = 8
-HTTP_POOL_TIMEOUT    = 30
-DOWNLOAD_TIMEOUT     = 30
+HTTP_POOL_TIMEOUT    = 60
+DOWNLOAD_TIMEOUT     = 60
 
 # ── Limits ────────────────────────────────────────────────────────────────────
 CHAR_LIMIT           = 800    # max chars per Telegram message
@@ -182,7 +182,7 @@ VIDEO_BACKGROUNDS: dict[str, str] = {
     "parchment": "0xF2DFB9",
     "night":     "0x0F192D",
 }
-VIDEO_DEFAULT_BG = "dark"
+VIDEO_DEFAULT_BG = "parchment"
 
 # ── File-ID key index helpers ─────────────────────────────────────────────────
 # Compact integer indices keep keys short and legible.

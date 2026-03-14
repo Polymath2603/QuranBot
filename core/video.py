@@ -138,10 +138,10 @@ def _probe_audio_duration(path: Path):
 
 # ── Output filename — only ratio bit now ─────────────────────────────────────
 
-def _out_filename(voice, sura, range_start, range_end, ratio) -> str:
+def _out_filename(voice, sura, range_start, range_end, ratio, bg_key, font_key) -> str:
     ratio_bit = 0 if ratio == "landscape" else 1
-    range_id  = f"{sura:03d}{range_start:03d}{sura:03d}{range_end:03d}"
-    return f"{voice}_{range_id}_{ratio_bit}.mp4"
+    range_id  = f"{sura:03d}{range_start:03d}{range_end:03d}"
+    return f"{voice}_{range_id}_{ratio_bit}_{bg_key[:3]}_{font_key[:3]}.mp4"
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ def gen_video(
         output_dir = Path(tempfile.gettempdir())
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    out_name = _out_filename(voice, sura, range_start, range_end, ratio)
+    out_name = _out_filename(voice, sura, range_start, range_end, ratio, bg_key, font_key)
     out_path = output_dir / out_name
 
     if out_path.exists() and out_path.stat().st_size > 0:

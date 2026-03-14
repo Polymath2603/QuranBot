@@ -62,7 +62,7 @@ data/images/
 data/tafasir/
 data/tarajem/
 data/users/
-data/backgrounds
+data/backgrounds/
 data/*.db
 data/*.sqlite*
 
@@ -73,7 +73,7 @@ data/*.sqlite*
 !data/UthmanTN_v2-0.ttf
 
 # Output directory
-output/*
+output/
 !output/.gitkeep
 
 # Cache directory

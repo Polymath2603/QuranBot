@@ -121,6 +121,22 @@ class RequestQueue:
         finally:
             session.close()
 
+    async def cancel_all(self, keep_processing: bool = True) -> int:
+        """Admin function to cancel all pending items."""
+        async with self._lock:
+            session = get_session()
+            try:
+                pending = session.query(QueueItem).filter_by(status="pending").all()
+                count = 0
+                for item in pending:
+                    item.status = "cancelled"
+                    self._cancelled_ids.add(item.id)
+                    count += 1
+                session.commit()
+                return count
+            finally:
+                session.close()
+
     def position(self, item_id: int) -> int:
         """Return 1-based queue position of a pending item (0 = not found/done)."""
         session = get_session()
