@@ -4,6 +4,7 @@ python-dotenv>=1.0.0
 
 # Database & ORM
 SQLAlchemy>=2.0.0
+aiosqlite>=0.22.1
 
 # Arabic fuzzy matching (NLU sura name detection)
 rapidfuzz>=3.0.0

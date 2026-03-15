@@ -11,7 +11,7 @@ from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, InputMediaPhoto, Message
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
-    MessageHandler, PreCheckoutQueryHandler, filters, ContextTypes,
+    MessageHandler, PreCheckoutQueryHandler, filters, ContextTypes
 )
 
 def _patch_reply(func):
@@ -40,13 +40,13 @@ from config import (
     PAGE_SOURCES, DEFAULT_PAGE_SOURCE,
     TAFSIR_SOURCES, DEFAULT_TAFSIR,
     img_fid_key, vid_fid_key, aud_fid_key,
-    IMAGE_RESOLUTIONS,
+    IMAGE_RESOLUTIONS
 )
 from core.data import (
     load_quran_data, load_quran_text, load_quran_text_simple,
     replace_basmala_symbol,
     get_sura_name, get_sura_display_name,
-    get_sura_aya_count, get_sura_start_index,
+    get_sura_aya_count, get_sura_start_index
 )
 from core.search    import search, make_snippet
 from core.tafsir    import get_tafsir
@@ -57,13 +57,13 @@ from core.verses    import (
     build_verse_keyboard, build_more_keyboard,
     send_text_single, send_text_range,
     send_paged_message,
-    send_img_page, _build_img_text,
+    send_img_page, _build_img_text
 )
 from core.image     import gen_verse_image
 from core.mushaf    import send_mushaf_page
 from core.database  import (
     init_db, get_session, get_db_user, update_user_field, User,
-    get_stats, increment_stat,
+    get_stats, increment_stat
 )
 from sqlalchemy import select
 from core.lang      import t
@@ -71,7 +71,7 @@ from core.nlu       import parse_message
 from core.utils     import (
     safe_filename, check_and_purge_storage, is_rate_limited,
     get_file_id, set_file_id, file_id_count,
-    get_free_mb, make_progress_cb, log_error,
+    get_free_mb, make_progress_cb, log_error
 )
 from core.queue     import request_queue, QueueItem
 from core.hadith    import get_random_hadith, format_hadith
@@ -1343,7 +1343,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 _EXACT: dict = {
     "menu_main":                  start_handler,
     "menu_settings":              settings_handler,
-    "menu_settings_other":         settings_other_handler,
+    "menu_settings_other":        settings_other_handler,
     "menu_settings_video":        settings_video_handler,
     "menu_settings_photo":        settings_photo_handler,
     "menu_donate":                donate_handler,

@@ -153,10 +153,12 @@ def wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> list[st
 def clean_verse(text: str) -> str:
     """
     Remove specific non-letter characters for cleaner visual display:
+    - U+06E3: small sub س, not supported by font
     - U+0670: Dagger Alif (pronunciation guide, often visually distracting in some fonts).
     - U+06D6-U+06ED: Quranic annotation marks (pause signs, small high letters etc.) 
       that are not part of the core letters but are pronunciation/recitation guides.
     """
+    text = re.sub(r'\u06E3', '', text)
     # text = re.sub(r'\u0670', '', text)
     # text = re.sub(r'[\u06D6-\u06ED]', '', text)
     return text
