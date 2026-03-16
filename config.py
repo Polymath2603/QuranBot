@@ -142,7 +142,7 @@ HADITH_FILES: dict[str, str] = {
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 # Extra font files must be placed in data/
 FONT_PATHS: dict[str, str] = {
-    "uthmani": str(DATA_DIR / "UthmanicHafs1-Ver14.ttf"),
+    "uthmani": str(DATA_DIR / "hafs.18.ttf"),
     "amiri":   str(DATA_DIR / "Amiri-Regular.ttf"),
     "noto":    str(DATA_DIR / "NotoNaskhArabic-Regular.ttf"),
 }

@@ -107,12 +107,15 @@ def _ratio_label(key: str, lang: str) -> str:
     return t("ratio_portrait" if key == "portrait" else "ratio_landscape", lang)
 
 def _tafsir_label(source: str, lang: str) -> str:
-    info = TAFSIR_SOURCES.get(source, TAFSIR_SOURCES[DEFAULT_TAFSIR])
-    return info.get(lang, info["en"])
+    info = TAFSIR_SOURCES.get(source, TAFSIR_SOURCES.get(DEFAULT_TAFSIR, {}))
+    return info.get(lang, info.get("en", source))
 
 def _source_label(source: str, lang: str) -> str:
-    info = PAGE_SOURCES.get(source, PAGE_SOURCES[DEFAULT_PAGE_SOURCE])
-    return info.get(lang, info["en"])
+    info = PAGE_SOURCES.get(source, PAGE_SOURCES.get(DEFAULT_PAGE_SOURCE, {}))
+    return info.get(lang, info.get("en", source))
+
+def _lang_label(lang_key: str, lang: str) -> str:
+    return t(f"lang_{lang_key}", lang)
 
 def _sura_title(sura, lang, start, end=None) -> str:
     name  = get_sura_display_name(quran_data, sura, lang)
@@ -134,17 +137,12 @@ def _verse_char_len(sura: int, start: int, end: int) -> int:
 # ---------------------------------------------------------------------------
 
 async def _cycle_pref(user, key: str, options: list, default: str) -> str:
+    from core.database import update_user_preference
     cur = user.get_preference(key, default)
     try:    idx = options.index(cur)
-    except: idx = 0
+    except: idx = -1
     new = options[(idx + 1) % len(options)]
-    session = get_session()
-    result = await session.execute(select(User).filter_by(telegram_id=user.telegram_id))
-    db_user = result.scalars().first()
-    if db_user:
-        db_user.set_preference(key, new)
-        await session.commit()
-    await session.close()
+    await update_user_preference(user.telegram_id, key, new)
     return new
 
 
@@ -206,17 +204,13 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception: pass
     user       = await get_db_user(update.effective_user)
     lang       = user.language
-    lang_lbl   = t("lang_ar", lang) if lang == "ar" else t("lang_en", lang)
+    lang_lbl   = _lang_label(lang, lang)
     voice      = user.voice or DEFAULT_VOICE
     rec_name   = VOICES.get(voice, {}).get(lang, voice)
 
     keyboard = [
-        [InlineKeyboardButton(f"🌐 {t('setting_language', lang)}: {lang_lbl}", callback_data="setting_lang_toggle")],
+        [InlineKeyboardButton(f"🌐 {t('setting_language', lang)}: {lang_lbl}", callback_data="list_lang_0")],
         [InlineKeyboardButton(f"🎙️ {t('setting_reciter', lang)}: {rec_name}", callback_data="voice_list_0")],
-        [
-            InlineKeyboardButton(f"🖼️ {t('image', lang)}", callback_data="menu_settings_photo"),
-            InlineKeyboardButton(f"🎬 {t('video', lang)}", callback_data="menu_settings_video"),
-        ],
         [InlineKeyboardButton(f"▪️ {t('more', lang)}", callback_data="menu_settings_other")],
         [InlineKeyboardButton(t("back", lang), callback_data="menu_main")],
     ]
@@ -239,12 +233,17 @@ async def settings_other_handler(update: Update, context: ContextTypes.DEFAULT_T
     src        = user.get_preference("page_source", DEFAULT_PAGE_SOURCE)
     src_lbl    = _source_label(src, lang)
     tafsir_lbl = _tafsir_label(user.tafsir_source or DEFAULT_TAFSIR, lang)
-    fmt_lbl    = _fmt_label(user.get_preference("text_format", "msg"), lang)
+    fmt        = user.get_preference("text_format", "msg")
+    fmt_lbl    = _fmt_label(fmt, lang)
 
     keyboard = [
-        [InlineKeyboardButton(f"📚 {t('setting_tafsir', lang)}: {tafsir_lbl}", callback_data="setting_tafsir_toggle")],
-        [InlineKeyboardButton(f"📖 {t('setting_source', lang)}: {src_lbl}", callback_data="setting_source_toggle")],
-        [InlineKeyboardButton(f"📄 {t('setting_fmt', lang)}: {fmt_lbl}",       callback_data="setting_format_toggle")],
+        [InlineKeyboardButton(f"📚 {t('setting_tafsir', lang)}: {tafsir_lbl}", callback_data="list_tafsir_0")],
+        [InlineKeyboardButton(f"📖 {t('setting_source', lang)}: {src_lbl}", callback_data="list_source_0")],
+        [InlineKeyboardButton(f"📄 {t('setting_fmt', lang)}: {fmt_lbl}",       callback_data="toggle_format")],
+        [
+            InlineKeyboardButton(f"🖼️ {t('image', lang)}", callback_data="menu_settings_photo"),
+            InlineKeyboardButton(f"🎬 {t('video', lang)}", callback_data="menu_settings_video"),
+        ],
         [InlineKeyboardButton(t("back", lang), callback_data="menu_settings")],
     ]
     await query.edit_message_text(
@@ -271,9 +270,9 @@ async def settings_video_handler(update: Update, context: ContextTypes.DEFAULT_T
     vid_font = user.get_preference("video_font",  VIDEO_DEFAULT_FONT)
 
     keyboard = [
-        [InlineKeyboardButton(f"🔤 {t('setting_font', lang)}: {_font_label(vid_font, lang)}", callback_data="setting_video_font_toggle")],
-        [InlineKeyboardButton(f"🎨 {t('setting_theme', lang)}: {_bg_label(vid_bg, lang)}",   callback_data="setting_video_bg_toggle")],
-        [InlineKeyboardButton(f"📐 {t('setting_ratio', lang)}: {_ratio_label(ratio, lang)}", callback_data="vtoggle_ratio")],
+        [InlineKeyboardButton(f"🔤 {t('setting_font', lang)}: {_font_label(vid_font, lang)}", callback_data="toggle_vfont")],
+        [InlineKeyboardButton(f"🎨 {t('setting_theme', lang)}: {_bg_label(vid_bg, lang)}",   callback_data="toggle_vtheme")],
+        [InlineKeyboardButton(f"📐 {t('setting_ratio', lang)}: {_ratio_label(ratio, lang)}", callback_data="toggle_vratio")],
         [InlineKeyboardButton(t("back", lang), callback_data="menu_settings_other")],
     ]
     await query.edit_message_text(
@@ -298,9 +297,9 @@ async def settings_photo_handler(update: Update, context: ContextTypes.DEFAULT_T
     res      = user.get_preference("img_resolution", DEFAULT_IMAGE_RESOLUTION)
 
     keyboard = [
-        [InlineKeyboardButton(f"🔤 {t('setting_font', lang)}: {_font_label(font_key, lang)}",  callback_data="setting_img_font_toggle")],
-        [InlineKeyboardButton(f"🎨 {t('setting_theme', lang)}: {_bg_label(bg_key, lang)}",     callback_data="setting_img_bg_toggle")],
-        [InlineKeyboardButton(f"📐 {t('setting_resolution', lang)}: {_res_label(res, lang)}", callback_data="setting_img_res_toggle")],
+        [InlineKeyboardButton(f"🔤 {t('setting_font', lang)}: {_font_label(font_key, lang)}",  callback_data="toggle_ifont")],
+        [InlineKeyboardButton(f"🎨 {t('setting_theme', lang)}: {_bg_label(bg_key, lang)}",     callback_data="toggle_itheme")],
+        [InlineKeyboardButton(f"📐 {t('setting_resolution', lang)}: {_res_label(res, lang)}", callback_data="list_ires_0")],
         [InlineKeyboardButton(t("back", lang), callback_data="menu_settings_other")],
     ]
     await query.edit_message_text(
@@ -314,64 +313,160 @@ async def settings_photo_handler(update: Update, context: ContextTypes.DEFAULT_T
 # Toggle handlers
 # ---------------------------------------------------------------------------
 
-async def setting_source_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "page_source", list(PAGE_SOURCES.keys()), DEFAULT_PAGE_SOURCE)
-    await settings_handler(update, context)
+# ---------------------------------------------------------------------------
+# Generic List Selection
+# ---------------------------------------------------------------------------
 
-async def setting_lang_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def settings_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try: await query.answer()
+    except Exception: pass
+    parts = query.data.split("_")
+    ltype = parts[1]
+    try: page = int(parts[2])
+    except: page = 0
+    
     user = await get_db_user(update.effective_user)
-    await update_user_field(user.telegram_id, language="ar" if user.language == "en" else "en")
-    await settings_handler(update, context)
+    lang = user.language
+    
+    options = [] # (label, value)
+    title = ""
+    back_call = "menu_settings_other"
+    
+    if ltype == "lang":
+        title = t("setting_language", lang)
+        options = [(t(f"lang_{k}", lang), k) for k in ["ar", "en", "tr", "ur", "fr", "id"]]
+        back_call = "menu_settings"
+    elif ltype == "tafsir":
+        title = t("setting_tafsir", lang)
+        # Filter: show all Arabic, plus those matching current lang
+        for k, v in TAFSIR_SOURCES.items():
+            if k.startswith("ar.") or k in ["muyassar", "jalalayn"] or k.startswith(f"{lang}."):
+                options.append((v.get(lang, v.get("en", k)), k))
+    elif ltype == "source":
+        title = t("setting_source", lang)
+        options = [(v.get(lang, v.get("en", k)), k) for k, v in PAGE_SOURCES.items()]
+    elif ltype == "format":
+        title = t("setting_fmt", lang)
+        options = [(_fmt_label(k, lang), k) for k in ["msg", "lrc", "srt"]]
+    elif ltype in ["ifont", "vfont"]:
+        title = t("setting_font", lang)
+        options = [(_font_label(k, lang), k) for k in ["uthmani", "amiri", "noto"]]
+    elif ltype in ["itheme", "vtheme"]:
+        title = t("setting_theme", lang)
+        options = [(_bg_label(k, lang), k) for k in ["parchment", "dark", "night"]]
+    elif ltype == "ires":
+        title = t("setting_resolution", lang)
+        options = [(_res_label(k, lang), k) for k in ["auto", "portrait", "landscape"]]
+    elif ltype == "vratio":
+        title = t("setting_ratio", lang)
+        options = [(_ratio_label(k, lang), k) for k in ["portrait", "landscape"]]
 
-async def setting_format_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    per_page = 8
+    total_pages = (len(options) + per_page - 1) // per_page
+    chunk = options[page * per_page:(page + 1) * per_page]
+    
+    # Current value check
+    cur_val = None
+    if ltype == "lang": cur_val = user.language
+    elif ltype == "tafsir": cur_val = user.tafsir_source or DEFAULT_TAFSIR
+    elif ltype == "source": cur_val = user.get_preference("page_source", DEFAULT_PAGE_SOURCE)
+    elif ltype == "format": cur_val = user.get_preference("text_format", "msg")
+    elif ltype == "ifont": cur_val = user.get_preference("img_font", IMAGE_DEFAULT_FONT)
+    elif ltype == "vfont": cur_val = user.get_preference("video_font", VIDEO_DEFAULT_FONT)
+    elif ltype == "itheme": cur_val = user.get_preference("img_bg", IMAGE_DEFAULT_BG)
+    elif ltype == "vtheme": cur_val = user.get_preference("video_bg", VIDEO_DEFAULT_BG)
+    elif ltype == "ires": cur_val = user.get_preference("img_resolution", DEFAULT_IMAGE_RESOLUTION)
+    elif ltype == "vratio": cur_val = user.get_preference("video_ratio", VIDEO_DEFAULT_RATIO)
+
+    keyboard, row = [], []
+    for lbl, val in chunk:
+        mark = "✅ " if val == cur_val else ""
+        row.append(InlineKeyboardButton(f"{mark}{lbl}", callback_data=f"set_{ltype}_{val}"))
+        if len(row) == 2: keyboard.append(row); row = []
+    if row: keyboard.append(row)
+    
+    nav = []
+    if page > 0: nav.append(InlineKeyboardButton(t("prev", lang), callback_data=f"list_{ltype}_{page-1}"))
+    if page < total_pages - 1: nav.append(InlineKeyboardButton(t("next", lang), callback_data=f"list_{ltype}_{page+1}"))
+    if nav: keyboard.append(nav)
+    
+    # Correct back button based on context
+    if ltype in ["vfont", "vtheme", "vratio"]: back_call = "menu_settings_video"
+    elif ltype in ["ifont", "itheme", "ires"]: back_call = "menu_settings_photo"
+    
+    keyboard.append([InlineKeyboardButton(t("back", lang), callback_data=back_call)])
+    
+    await query.edit_message_text(f"⚙️ {title}", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def settings_set_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try: await query.answer()
+    except Exception: pass
+    parts = query.data.split("_")
+    ltype = parts[1]
+    value = "_".join(parts[2:])
+    
     user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "text_format", ["msg", "lrc", "srt"], "msg")
-    await settings_handler(update, context)
+    
+    if ltype == "lang":
+        await update_user_field(user.telegram_id, language=value)
+        await settings_handler(update, context)
+        return
+    elif ltype == "tafsir":
+        await update_user_field(user.telegram_id, tafsir_source=value)
+        await settings_other_handler(update, context)
+        return
+    
+    # Map ltype to preference key
+    pref_map = {
+        "source": "page_source",
+        "format": "text_format",
+        "ifont": "img_font", "vfont": "video_font",
+        "itheme": "img_bg", "vtheme": "video_bg",
+        "ires": "img_resolution",
+        "vratio": "video_ratio"
+    }
+    pref_key = pref_map.get(ltype)
+    if pref_key:
+        from core.database import update_user_preference
+        await update_user_preference(user.telegram_id, pref_key, value)
+    
+    # Return to appropriate menu
+    if ltype in ["source", "format"]: await settings_other_handler(update, context)
+    elif ltype in ["vfont", "vtheme", "vratio"]: await settings_video_handler(update, context)
+    elif ltype in ["ifont", "itheme", "ires"]: await settings_photo_handler(update, context)
 
-async def setting_tafsir_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    new  = await _cycle_pref(user, "_tafsir_tmp", list(TAFSIR_SOURCES.keys()), DEFAULT_TAFSIR)
-    # tafsir_source is a real column, not a preference
-    src  = list(TAFSIR_SOURCES.keys())
-    cur  = user.tafsir_source or DEFAULT_TAFSIR
-    try: idx = src.index(cur)
-    except: idx = 0
-    await update_user_field(user.telegram_id, tafsir_source=src[(idx + 1) % len(src)])
-    await settings_handler(update, context)
 
-async def setting_img_font_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "img_font", ["uthmani", "amiri", "noto"], IMAGE_DEFAULT_FONT)
-    await settings_photo_handler(update, context)
+# ---------------------------------------------------------------------------
+# Quick Toggles (for <= 3 items)
+# ---------------------------------------------------------------------------
 
-async def setting_img_bg_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "img_bg", ["parchment", "dark", "night"], IMAGE_DEFAULT_BG)
-    await settings_photo_handler(update, context)
-
-async def setting_img_res_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "img_resolution", list(IMAGE_RESOLUTIONS.keys()), DEFAULT_IMAGE_RESOLUTION)
-    await settings_photo_handler(update, context)
-
-async def setting_video_font_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "video_font", ["uthmani", "amiri", "noto"], VIDEO_DEFAULT_FONT)
-    await settings_video_handler(update, context)
-
-async def setting_video_bg_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "video_bg", ["dark", "parchment", "night"], VIDEO_DEFAULT_BG)
-    await settings_video_handler(update, context)
-
-async def ratio_toggle_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def settings_toggle_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try: await query.answer()
     except Exception: pass
     user = await get_db_user(update.effective_user)
-    await _cycle_pref(user, "video_ratio", ["portrait", "landscape"], VIDEO_DEFAULT_RATIO)
-    await settings_video_handler(update, context)
+    data = query.data
+    
+    if data == "toggle_format":
+        await _cycle_pref(user, "text_format", ["msg", "lrc", "srt"], "msg")
+        await settings_other_handler(update, context)
+    elif data == "toggle_ifont":
+        await _cycle_pref(user, "img_font", ["uthmani", "amiri", "noto"], IMAGE_DEFAULT_FONT)
+        await settings_photo_handler(update, context)
+    elif data == "toggle_vfont":
+        await _cycle_pref(user, "video_font", ["uthmani", "amiri", "noto"], VIDEO_DEFAULT_FONT)
+        await settings_video_handler(update, context)
+    elif data == "toggle_itheme":
+        await _cycle_pref(user, "img_bg", ["parchment", "dark", "night"], IMAGE_DEFAULT_BG)
+        await settings_photo_handler(update, context)
+    elif data == "toggle_vtheme":
+        await _cycle_pref(user, "video_bg", ["parchment", "dark", "night"], VIDEO_DEFAULT_BG)
+        await settings_video_handler(update, context)
+    elif data == "toggle_vratio":
+        await _cycle_pref(user, "video_ratio", ["portrait", "landscape"], VIDEO_DEFAULT_RATIO)
+        await settings_video_handler(update, context)
 
 
 # ---------------------------------------------------------------------------
@@ -833,10 +928,11 @@ async def queue_cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     user      = await get_db_user(update.effective_user)
     cancelled = await request_queue.cancel(item_id, user.telegram_id)
     if cancelled:
-        try: await query.edit_message_text(t("queue_cancelled", user.language))
+        try: await query.edit_message_text(f"❌ {t('cancelled', user.language)}")
         except Exception: pass
     else:
-        try: await query.answer(t("queue_processing", user.language), show_alert=True)
+        # If cancelled is False, it means already done or not found
+        try: await query.answer(t("cancel_failed", user.language), show_alert=True)
         except Exception: pass
 
 
@@ -1285,7 +1381,7 @@ async def admin_cancel_all_handler(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(t("admin_not_allowed", lang)); return
 
     count = await request_queue.cancel_all()
-    await update.message.reply_text(f"✅ Cancelled {count} pending queue items.")
+    await update.message.reply_text(f"✅ Cancelled {count} items (including any active processing).")
 
 async def hadith_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await get_db_user(update.effective_user)
@@ -1348,19 +1444,12 @@ _EXACT: dict = {
     "menu_settings_photo":        settings_photo_handler,
     "menu_donate":                donate_handler,
     "menu_download":              lambda u, c: show_sura_list(u, 0),
-    "setting_source_toggle":      setting_source_toggle,
-    "setting_lang_toggle":        setting_lang_toggle,
-    "setting_format_toggle":      setting_format_toggle,
-    "setting_tafsir_toggle":      setting_tafsir_toggle,
-    "setting_img_font_toggle":    setting_img_font_toggle,
-    "setting_img_bg_toggle":      setting_img_bg_toggle,
-    "setting_img_res_toggle":     setting_img_res_toggle,
-    "setting_video_font_toggle":  setting_video_font_toggle,
-    "setting_video_bg_toggle":    setting_video_bg_toggle,
-    "vtoggle_ratio":              ratio_toggle_handler,
 }
 
 _PREFIX: list[tuple] = [
+    ("list_",         settings_list_handler),
+    ("set_",          settings_set_handler),
+    ("toggle_",       settings_toggle_handler),
     ("more_",         more_handler),
     ("mushaf_",       mushaf_handler),
     ("surapage_",     lambda u, c: show_sura_list(u, int(u.callback_query.data.split("_")[1]))),

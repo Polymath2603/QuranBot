@@ -128,3 +128,12 @@ async def update_user_field(telegram_id: int, **fields) -> None:
             setattr(user, key, value)
         await session.commit()
     await session.close()
+async def update_user_preference(telegram_id: int, key: str, value) -> None:
+    """Safely update a single preference for a user."""
+    session = get_session()
+    result = await session.execute(select(User).filter_by(telegram_id=telegram_id))
+    user = result.scalars().first()
+    if user:
+        user.set_preference(key, value)
+        await session.commit()
+    await session.close()

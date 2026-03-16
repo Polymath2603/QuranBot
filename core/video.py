@@ -132,7 +132,11 @@ def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
             y += line_h; continue
         lw = get_text_width(draw, ln, font)
         x  = (fixed_w - lw) // 2
-        draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
+        try:
+            draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
+        except KeyError:
+            # Fallback for systems without libraqm
+            draw.text((x, y), ln, font=font, fill=fg)
         y += line_h
 
     del draw

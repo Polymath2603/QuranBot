@@ -59,6 +59,8 @@ class RequestQueue:
         self._processor_fn = None   # injected from bot.py to avoid circular import
         self._cancelled_ids: set = set()  # fast in-memory cancel lookup
         self._lock = asyncio.Lock()
+        self._current_task: asyncio.Task | None = None
+        self._current_item_id: int | None = None
 
     def set_processor(self, fn):
         """fn(bot, item: QueueItem) → None  (async)"""
@@ -121,31 +123,43 @@ class RequestQueue:
         return item_id
 
     async def cancel(self, item_id: int, user_id: int) -> bool:
-        """Cancel a pending item. Returns True if cancelled, False if already processing."""
+        """Cancel a pending or processing item. Returns True if cancelled."""
         session = get_session()
         try:
             result = await session.execute(
                 select(QueueItem).filter_by(id=item_id, user_id=user_id)
             )
             item = result.scalars().first()
-            if not item or item.status != "pending":
+            if not item or item.status in ("cancelled", "done"):
                 return False
+            
+            # If processing, cancel the task
+            if item.status == "processing":
+                if self._current_item_id == item_id and self._current_task:
+                    self._current_task.cancel()
+                    logger.info("Cancelled processing task for item %d", item_id)
+            
             item.status = "cancelled"
             await session.commit()
-            self._cancelled_ids.add(item_id)   # skip DB lookup in _consume
+            self._cancelled_ids.add(item_id)
             return True
         finally:
             await session.close()
 
-    async def cancel_all(self, keep_processing: bool = True) -> int:
-        """Admin function to cancel all pending items."""
+    async def cancel_all(self) -> int:
+        """Admin function to cancel all pending items AND stop the current processing one."""
         async with self._lock:
             session = get_session()
             try:
-                result = await session.execute(select(QueueItem).filter_by(status="pending"))
-                pending = result.scalars().all()
+                result = await session.execute(
+                    select(QueueItem).filter(QueueItem.status.in_(["pending", "processing"]))
+                )
+                items = result.scalars().all()
                 count = 0
-                for item in pending:
+                for item in items:
+                    if item.status == "processing":
+                        if self._current_item_id == item.id and self._current_task:
+                            self._current_task.cancel()
                     item.status = "cancelled"
                     self._cancelled_ids.add(item.id)
                     count += 1
@@ -189,6 +203,7 @@ class RequestQueue:
                 continue
 
             item.status = "processing"
+            self._current_item_id = item_id
             await session.commit()
             await session.close()
 
@@ -197,12 +212,19 @@ class RequestQueue:
 
             try:
                 if self._processor_fn:
-                    await self._processor_fn(self._bot, item_id)
+                    self._current_task = asyncio.create_task(self._processor_fn(self._bot, item_id))
+                    await self._current_task
+            except asyncio.CancelledError:
+                logger.info("Task for item %d was cancelled", item_id)
+                await self._notify_cancelled(item_id)
             except Exception as e:
                 logger.error("Queue processor error for item %d: %s", item_id, e, exc_info=True)
                 from .utils import log_error
                 log_error(e, context="queue_processor", extra={"item_id": item_id})
                 await self._notify_error(item_id)
+            finally:
+                self._current_task = None
+                self._current_item_id = None
 
             self._queue.task_done()
 
@@ -216,11 +238,33 @@ class RequestQueue:
             item = result.scalars().first()
             if item and item.status_msg_id:
                 from .lang import t
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton(t("queue_cancel_btn", item.lang), callback_data=f"queue_cancel_{item.id}")
+                ]])
                 try:
                     await self._bot.edit_message_text(
                         chat_id    = item.chat_id,
                         message_id = item.status_msg_id,
                         text       = t("queue_processing", item.lang),
+                        reply_markup = kb,
+                    )
+                except Exception: pass
+        finally:
+            await session.close()
+
+    async def _notify_cancelled(self, item_id: int):
+        session = get_session()
+        try:
+            result = await session.execute(select(QueueItem).filter_by(id=item_id))
+            item = result.scalars().first()
+            if item and item.status_msg_id:
+                from .lang import t
+                try:
+                    await self._bot.edit_message_text(
+                        chat_id    = item.chat_id,
+                        message_id = item.status_msg_id,
+                        text       = f"❌ {t('cancelled', item.lang)}",
                     )
                 except Exception: pass
         finally:

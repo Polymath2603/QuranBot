@@ -263,7 +263,11 @@ def render_verse_png(
         x  = (canvas_w - lw) // 2
 
         # Slight stroke to increase font weight artificially
-        draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
+        try:
+            draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
+        except KeyError:
+            # Fallback for systems without libraqm
+            draw.text((x, y), ln, font=font, fill=fg)
         y += line_h
 
     del draw
