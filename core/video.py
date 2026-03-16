@@ -155,8 +155,8 @@ def _build_entries(verses_list: list, start_aya: int, verse_durations: list,
         stripped   = strip_basmala(verse, sura, aya_i) if sura else verse
         # clean_verse removes Dagger Alif and Quranic pause/annotation marks
         # to ensure a cleaner visual appearance in video frames.
-        cleaned    = clean_verse(stripped)
-        frame_text = f"{cleaned} ({num})"
+        cleaned    = clean_verse(stripped, font_key)
+        frame_text = f"{cleaned} {num}"
         entries.append({"text": frame_text, "start": t, "end": t + dur})
         t += dur
     return entries
@@ -304,7 +304,7 @@ def gen_video(
         _progress(70, "compositing…")
 
         sync = VIDEO_SYNC_OFFSET
-        txt_inputs = ["-stream_loop", "-1", "-i", str(text_track)]
+        txt_inputs = ["-i", str(text_track)]
         
         from config import VIDEO_BACKGROUNDS
         bg_hex = VIDEO_BACKGROUNDS.get(bg_key, VIDEO_BACKGROUNDS[VIDEO_DEFAULT_BG])

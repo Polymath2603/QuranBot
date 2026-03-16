@@ -98,6 +98,13 @@ Background tasks are wrapped in `_safe_process_queue_item()` which captures exce
 
 Indices are positions in `config._FONT_LIST`, `_IMG_THEME`, etc. — stable across restarts.
 
+### Search Highlighting
+
+Full-text search results in `core/search.py` use a two-step highlighting process:
+1. **Normalization**: Both the search query and the Quranic text are normalized (removing diacritics, dagger alifs, etc.) to find character-level matches.
+2. **Word-Level bolding**: The match offsets are mapped back to word indices in the original (non-normalized) simplified text. All words covering the match range are wrapped in `<b>` tags.
+3. **Display**: Handlers in `bot.py` must use `parse_mode="HTML"` for these snippets to render correctly in Telegram.
+
 ### Mushaf pages
 
 ```
@@ -116,7 +123,7 @@ No image generation for mushaf pages. Not affected by text format settings.
 - Width fixed at 1080px (or fixed size for portrait/landscape)
 - Height auto-computed from rendered line count
 - DP text-balancing wrapper (min 4 words/line)
-- Font-conditional: uthmani → Arabic-Indic numbers + raw basmala text; other fonts → western numbers + ﷽ glyph
+- Font-conditional: Configured via `FONT_SETTINGS` in `config.py` (Numerals, Cleaning, Brackets per font).
 
 ### Video pipeline
 

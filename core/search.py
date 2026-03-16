@@ -128,6 +128,11 @@ def make_snippet(verse: str, query: str, context_words: int = 4) -> str:
     first_word = char_to_word[match_start] if match_start < len(char_to_word) else 0
     last_word  = char_to_word[min(match_end - 1, len(char_to_word) - 1)]
 
+    # Highlight the matching words in-place (wrapped with <b>)
+    highlighted_words = list(orig_words)
+    for wi in range(first_word, last_word + 1):
+        highlighted_words[wi] = f"<b>{highlighted_words[wi]}</b>"
+
     # Context slices
     left_start  = max(0, first_word - context_words)
     right_end   = min(len(orig_words), last_word + context_words + 1)
@@ -135,5 +140,5 @@ def make_snippet(verse: str, query: str, context_words: int = 4) -> str:
     prefix = ("…" if left_start > 0 else "")
     suffix = ("…" if right_end < len(orig_words) else "")
 
-    chunk = " ".join(orig_words[left_start:right_end])
+    chunk = " ".join(highlighted_words[left_start:right_end])
     return prefix + chunk + suffix

@@ -798,7 +798,7 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pos_msg = await query.message.reply_text("🖼️")
     await request_queue.enqueue(
         context.bot, user.telegram_id, update.effective_chat.id, "image",
-        {"sura": sura, "start_aya": sura, "end_aya": end_aya,
+        {"sura": sura, "start_aya": start_aya, "end_aya": end_aya,
          "title": title, "font_key": font_key, "bg_key": bg_key,
          "resolution": resolution},
         lang, status_msg_id=pos_msg.message_id,
@@ -1106,10 +1106,10 @@ async def _send_search_results(message, results: list, query_text: str, lang: st
 
     kb = InlineKeyboardMarkup(rows) if rows else None
     if edit:
-        try: await message.edit_text("\n".join(text_parts), reply_markup=kb)
-        except Exception: await message.reply_text("\n".join(text_parts), reply_markup=kb)
+        try: await message.edit_text("\n".join(text_parts), reply_markup=kb, parse_mode="HTML")
+        except Exception: await message.reply_text("\n".join(text_parts), reply_markup=kb, parse_mode="HTML")
     else:
-        await message.reply_text("\n".join(text_parts), reply_markup=kb)
+        await message.reply_text("\n".join(text_parts), reply_markup=kb, parse_mode="HTML")
 
 async def search_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

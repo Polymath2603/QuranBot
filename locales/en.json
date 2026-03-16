@@ -98,6 +98,10 @@
     "setting_language": "Language",
     "lang_ar": "العربية",
     "lang_en": "English",
+    "lang_tr": "Türkçe",
+    "lang_ur": "اردو",
+    "lang_fr": "Français",
+    "lang_id": "Bahasa Indonesia",
     "res_auto": "Auto",
     "settings_other": "Other Settings"
 }

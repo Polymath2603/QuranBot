@@ -71,33 +71,46 @@ ADMIN_IDS: list = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.st
 # Each entry: code → {ar: Arabic name, en: English name}
 DEFAULT_VOICE = "Alafasy_64kbps"
 VOICES: dict[str, dict] = {
+    # Preferred qualities (64kbps or 128kbps)
     "Alafasy_64kbps":                 {"ar": "مشاري العفاسي",         "en": "Mishary Alafasy"},
     "Husary_64kbps":                  {"ar": "محمود الحصري",          "en": "Mahmoud Al-Husary"},
-    "Abdul_Basit_Murattal_192kbps":   {"ar": "عبد الباسط عبد الصمد", "en": "Abdul Basit"},
+    "Abdul_Basit_Murattal_64kbps":    {"ar": "عبد الباسط (مرتل)",      "en": "Abdul Basit (Murattal)"},
+    "Abdul_Basit_Mujawwad_128kbps":   {"ar": "عبد الباسط (مجود)",      "en": "Abdul Basit (Mujawwad)"},
     "Abdurrahmaan_As-Sudais_192kbps": {"ar": "عبد الرحمن السديس",    "en": "Abdurrahman As-Sudais"},
+    "Saood_ash-Shuraym_64kbps":       {"ar": "سعود الشريم",           "en": "Saood ash-Shuraym"},
     "Abu_Bakr_Ash-Shaatree_64kbps":   {"ar": "أبو بكر الشاطري",      "en": "Abu Bakr Ash-Shatri"},
     "Ahmed_ibn_Ali_al-Ajamy_128kbps": {"ar": "أحمد العجمي",          "en": "Ahmed Al-Ajamy"},
     "Ghamadi_40kbps":                 {"ar": "سعد الغامدي",          "en": "Saad Al-Ghamadi"},
     "Hani_Rifai_192kbps":             {"ar": "هاني الرفاعي",         "en": "Hani Ar-Rifai"},
     "Maher_AlMuaiqly_64kbps":         {"ar": "ماهر المعيقلي",        "en": "Maher Al-Muaiqly"},
-    "MahmoudKhalil_Al-Husary_64kbps": {"ar": "محمود خليل الحصري",   "en": "Mahmoud Khalil Al-Husary"},
     "Minshawy_Murattal_128kbps":      {"ar": "محمد صديق المنشاوي",  "en": "Mohamed Siddiq Al-Minshawi"},
+    "Minshawy_Mujawwad_64kbps":       {"ar": "المنشاوي (مجود)",      "en": "Al-Minshawi (Mujawwad)"},
     "Nasser_Alqatami_128kbps":        {"ar": "ناصر القطامي",         "en": "Nasser Al-Qatami"},
-    "Parhizgar_48kbps":               {"ar": "عبدالباسط هاشمي",      "en": "Shahriar Parhizgar"},
     "Yasser_Ad-Dussary_128kbps":      {"ar": "ياسر الدوسري",         "en": "Yasser Ad-Dussary"},
-    "Ayman_Sowaid_64kbps":            {"ar": "أيمن سويد",            "en": "Ayman Sowaid"},
+    "Hudhaify_64kbps":                {"ar": "علي الحذيفي",          "en": "Ali Al-Hudhaify"},
+    "Muhammad_Ayyoub_128kbps":        {"ar": "محمد أيوب",             "en": "Muhammad Ayyoub"},
+    "Muhammad_Jibreel_64kbps":         {"ar": "محمد جبريل",            "en": "Muhammad Jibreel"},
+    "Mustafa_Ismail_64kbps":          {"ar": "مصطفي إسماعيل",        "en": "Mustafa Ismail"},
+    "Mohammad_al_Tablaway_64kbps":    {"ar": "محمد الطبلاوي",         "en": "Mohammad Al-Tablaway"},
+    "Ibrahim_Al_Akhdar_64kbps":       {"ar": "إبراهيم الأخضر",        "en": "Ibrahim Al-Akhdar"},
     "Aziz_Alili_128kbps":             {"ar": "عزيز عليلي",           "en": "Aziz Alili"},
     "Sahl_Yassin_128kbps":            {"ar": "سهل ياسين",            "en": "Sahl Yassin"},
     "Warsh_Ibrahim_Walk_192kbps":     {"ar": "إبراهيم الأخضر (ورش)", "en": "Ibrahim Walk (Warsh)"},
 }
 
 # ── Tafsir sources ────────────────────────────────────────────────────────────
-# Local file (if present): DATA_DIR/tafsir/{key}.json  → {"sura:aya": "text", ...}
-# Fallback: AlQuran.cloud API  (edition string → EDITIONS in tafsir.py)
 DEFAULT_TAFSIR = "muyassar"
 TAFSIR_SOURCES: dict[str, dict] = {
-    "muyassar": {"ar": "تفسير الميسر",  "en": "Al-Muyassar",  "edition": "ar.muyassar"},
-    "jalalayn": {"ar": "تفسير الجلالين","en": "Al-Jalalayn",  "edition": "ar.jalalayn"},
+    "muyassar": {"ar": "تفسير الميسر",  "en": "Al-Muyassar",        "edition": "ar.muyassar"},
+    "jalalayn": {"ar": "تفسير الجلالين","en": "Al-Jalalayn",        "edition": "ar.jalalayn"},
+    "en.asad":       {"ar": "تفسير أسد (إنجليزي)", "en": "Asad (English)", "edition": "en.asad"},
+    "en.pickthall":  {"ar": "بيكثال (إنجليزي)", "en": "Pickthall (English)", "edition": "en.pickthall"},
+    "ur.ahmedali":   {"ar": "أحمد علي (أردو)",    "en": "Ahmed Ali (Urdu)",   "edition": "ur.ahmedali"},
+    "fr.hamidullah": {"ar": "حميد الله (فرنسي)",   "en": "Hamidullah (French)", "edition": "fr.hamidullah"},
+    "id.jalalayn":   {"ar": "الجلالين (إندونيسي)", "en": "Jalalayn (Indonesian)", "edition": "id.jalalayn"},
+    "tr.diyanet":    {"ar": "ديانت (تركي)",       "en": "Diyanet (Turkish)", "edition": "tr.diyanet"},
+    "es.cortes":     {"ar": "كورتيس (إسباني)",    "en": "Cortes (Spanish)",  "edition": "es.cortes"},
+    "de.aburida":    {"ar": "أبو رضا (ألماني)",    "en": "Abu Rida (German)", "edition": "de.aburida"},
 }
 
 # ── Mushaf page image sources ─────────────────────────────────────────────────
@@ -129,9 +142,14 @@ HADITH_FILES: dict[str, str] = {
 # ── Fonts ─────────────────────────────────────────────────────────────────────
 # Extra font files must be placed in data/
 FONT_PATHS: dict[str, str] = {
-    "uthmani": str(DATA_DIR / "KFGQPC-Warsh V2-Regular.ttf"),
+    "uthmani": str(DATA_DIR / "UthmanicHafs1-Ver14.ttf"),
     "amiri":   str(DATA_DIR / "Amiri-Regular.ttf"),
     "noto":    str(DATA_DIR / "NotoNaskhArabic-Regular.ttf"),
+}
+FONT_SETTINGS: dict[str, dict] = {
+    "uthmani": {"clean": True,  "num": "arabic",  "brackets": False},
+    "amiri":   {"clean": True, "num": "western", "brackets": True},
+    "noto":    {"clean": True, "num": "western", "brackets": True},
 }
 FONT_PATH = FONT_PATHS["uthmani"]   # legacy alias
 

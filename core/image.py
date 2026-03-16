@@ -40,8 +40,11 @@ def to_arabic(n: int) -> str:
     return "".join(_AR_DIGITS[int(d)] for d in str(n))
 
 def to_number(n: int, font_key: str) -> str:
-    """Arabic-Indic for uthmani font; western digits for all others."""
-    return to_arabic(n) if font_key == "uthmani" else str(n)
+    """Formatted verse number (style + optional brackets) per font."""
+    from config import FONT_SETTINGS
+    cfg = FONT_SETTINGS.get(font_key, FONT_SETTINGS[IMAGE_DEFAULT_FONT])
+    num = to_arabic(n) if cfg["num"] == "arabic" else str(n)
+    return f"({num})" if cfg.get("brackets", True) else num
 
 
 # ── Basmala helper ────────────────────────────────────────────────────────────
@@ -150,17 +153,19 @@ def wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_w: int) -> list[st
 
 # ── Verse text cleaner ────────────────────────────────────────────────────────
 
-def clean_verse(text: str) -> str:
+def clean_verse(text: str, font_key: str = IMAGE_DEFAULT_FONT) -> str:
     """
     Remove specific non-letter characters for cleaner visual display:
-    - U+06E3: small sub س, not supported by font
     - U+0670: Dagger Alif (pronunciation guide, often visually distracting in some fonts).
     - U+06D6-U+06ED: Quranic annotation marks (pause signs, small high letters etc.) 
-      that are not part of the core letters but are pronunciation/recitation guides.
     """
-    text = re.sub(r'\u06E3', '', text)
+    from config import FONT_SETTINGS
+    cfg = FONT_SETTINGS.get(font_key, FONT_SETTINGS[IMAGE_DEFAULT_FONT])
+    if not cfg["clean"]:
+        return text
+
     # text = re.sub(r'\u0670', '', text)
-    # text = re.sub(r'[\u06D6-\u06ED]', '', text)
+    text = re.sub(r'[\u06D6-\u06ED]', '', text)
     return text
 
 
@@ -276,7 +281,7 @@ def gen_verse_image(
     """Render verse text to PNG bytes."""
     # clean_verse removes Dagger Alif and Quranic pause/annotation marks
     # to ensure a cleaner visual appearance in video frames.
-    cleaned = clean_verse(text)
+    cleaned = clean_verse(text, font_key)
 
     img = render_verse_png(cleaned, font_key=font_key, bg_key=bg_key, resolution=resolution)
     try:

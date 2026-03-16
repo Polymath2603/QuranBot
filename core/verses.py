@@ -131,12 +131,12 @@ def _build_img_text(page_pairs: list, sura: int, font_key: str) -> str:
             else:
                 basmala_line = BASMALA_GLYPH
 
-            cleaned = clean_verse(body)
+            cleaned = clean_verse(body, font_key)
             if cleaned:
-                parts.append(f"{cleaned} ({num})")
+                parts.append(f"{cleaned} {num}")
         else:
-            cleaned = clean_verse(replace_basmala_symbol(v, sura, i))
-            parts.append(f"{cleaned} ({num})")
+            cleaned = clean_verse(replace_basmala_symbol(v, sura, i), font_key)
+            parts.append(f"{cleaned} {num}")
 
     body = " ".join(parts)
     if basmala_line:

@@ -2,6 +2,26 @@
 
 ---
 
+## 🟢 2026-03-16 — Search Intelligence, Resource Expansion & Font Update
+
+### ✨ Added
+- **Search Highlighting** — Search results now feature word-level bold highlighting (`<b>` tags) for matching terms, making results easier to scan in the UI.
+- **Enhanced Reciters (VOICES)** — Cleaned up duplicates and significantly expanded the list of voices to include popular reciters like Saood ash-Shuraym, Ali Al-Hudhaify, and Muhammad Ayyoub.
+- **Global Tafsirs** — Expanded `TAFSIR_SOURCES` to include translations in Indonesian, Turkish, Spanish, German, and French.
+- **Configurable Font Behavior** — New `FONT_SETTINGS` in `config.py` allows per-font control over text cleaning, numeral styles, and brackets.
+- **Verse Number Brackets Toggle** — Verse numbers can now be toggled between bracketed `(3)` and plain `3` styles via configuration.
+
+### 🔄 Changed
+- **Uthmani Font Upgrade** — Updated the core Hafs font to the latest official **KFGQPC Hafs v14** (`UthmanicHafs1-Ver14.ttf`) for superior rendering.
+- **Smart Text Cleanup** — The `clean_verse` logic now uses regex to selectively remove Quranic pause marks and annotations, ensure a premium look.
+- **HTML Search Results** — Search result handlers in `bot.py` now use `parse_mode="HTML"` to support rich highlighting.
+
+### 🐛 Fixed
+- **Image Generation Payload** — Corrected a critical typo in the generation queue that previously caused empty or mismatched images.
+- **Video Text Looping** — Disabled the unintended looping of the text track, ensuring it doesn't repeat when audio is longer than the verse content.
+
+---
+
 ## 🟢 2026-03-14 — Visual Consistency & System Stability
 
 ### ✨ Added

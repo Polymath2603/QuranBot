@@ -23,14 +23,14 @@ A Telegram bot for the Quran. Search, listen, read tafsir, and watch verse video
 - 📖 **Mushaf** — Display Quran pages from three sources: Hafs, Warsh, Color Tajweed. Caches file\_id after first send.
 - 🖼️ **Verse Images** — High-quality images (1080px) with 3 fonts and 3 themes. Auto or fixed dimensions.
 - 🎬 **Video** — Verse videos with synchronized audio, portrait or landscape.
-- 🎧 **18 Reciters** — Alafasy, As-Sudais, Abdul Basit, Al-Husary, and more.
-- 🔍 **Smart Search** — Full-text search with contextual snippets and comprehensive Arabic normalization.
-- 📚 **Two Tafsirs** — Al-Muyassar and Al-Jalalayn, from local file then API fallback.
+- 🎧 **25+ Reciters** — Alafasy, As-Sudais, Abdul Basit, Al-Husary, Shuraym, Hudhaify, and more.
+- 🔍 **Smart Search** — Full-text search with **bold highlighting** for matching terms and comprehensive Arabic normalization.
+- 📚 **12+ Tafsirs** — Comprehensive library including Al-Muyassar, Al-Jalalayn, and translations in 5+ languages.
 - 📄 **Export** — SRT and LRC with accurate per-verse timestamps.
 - 📿 **Hadiths** — `/hadith` sends a random hadith. Auto-posts to channel daily.
 - ⚡ **Instant resend** — file_id cached for every previously sent file.
 - 🚀 **Hardware Acceleration** — Support for NVENC, VAAPI, and VideoToolbox for ultra-fast video production.
-- 🌐 **Arabic & English** — Full bilingual interface.
+- 🌐 **Arabic & English** — Full bilingual interface and font-dependent rendering logic.
 
 ---
 
@@ -59,18 +59,8 @@ The aya appears with action buttons:
 
 ---
 
-## Settings
-
-```
-⚙️ Settings
-├─ 🌐 Language
-├─ 🎙️ Reciter
-├─ 🖼️🎬 Media (Image / Video)
-└─ ▪️ Other
-    ├─ 📚 Tafsir
-    ├─ 📖 Source
-    └─ 📄 Format
-```
+### ⚙️ Settings
+Settings are organized into groups: **Language**, **Reciter**, **Media** (Image/Video), and **More** (Tafsir, Source, Format). Developers can fine-tune font behavior in `config.py`.
 
 ---
 
