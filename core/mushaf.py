@@ -53,16 +53,6 @@ def get_cached_fid(source: str, page: int) -> str | None:
     return _load_ids(source).get(str(page))
 
 
-# ── Image path helper ─────────────────────────────────────────────────────────
-
-def page_image_path(source: str, page: int) -> Path:
-    return DATA_DIR / "images" / source / f"{page}.png"
-
-
-def page_available(source: str, page: int) -> bool:
-    return page_image_path(source, page).exists()
-
-
 # ── Keyboard ──────────────────────────────────────────────────────────────────
 
 def _mushaf_kb(page: int, lang: str, source: str) -> InlineKeyboardMarkup:
@@ -86,21 +76,27 @@ async def send_mushaf_page(
     source:    str,
     lang:      str,
 ) -> None:
-    """Send or edit a mushaf page image.
+    """Send or edit a mushaf page image using a remote URL.
 
-    is_edit=False → edit_message_media (replaces current message in-place)
-    is_edit=True  → same, for page navigation callbacks
-
-    Falls back to reply_photo if edit fails, or sends a text notice if the
-    PNG file for this page does not exist yet.
+    Telegram caches photos sent via URL and provides a file_id.
+    We cache this file_id locally to avoid redundant fetches.
     """
     if source not in PAGE_SOURCES:
         source = DEFAULT_PAGE_SOURCE
 
-    src_name = PAGE_SOURCES[source].get(lang, PAGE_SOURCES[source]["en"])
+    src_config = PAGE_SOURCES[source]
+    src_name   = src_config.get(lang, src_config["en"])
+    url_tmpl   = src_config.get("url")
+    
+    if not url_tmpl:
+        logger.error("No URL template for mushaf source: %s", source)
+        return
+
+    img_url  = url_tmpl.format(page=page_num)
     caption  = f"📖 {t('page', lang)} {page_num} — {src_name}"
     kb       = _mushaf_kb(page_num, lang, source)
 
+    # 1. Try with cached file_id
     cached = get_cached_fid(source, page_num)
     if cached:
         media = InputMediaPhoto(media=cached, caption=caption)
@@ -114,26 +110,22 @@ async def send_mushaf_page(
             except Exception:
                 pass
 
-    img_path = page_image_path(source, page_num)
-    if not img_path.exists():
-        # Image file not available — inform user
-        notice = t("mushaf_not_available", lang, page=page_num, source=src_name)
+    # 2. Not cached or edit failed — send via URL
+    media = InputMediaPhoto(media=img_url, caption=caption)
+    try:
+        sent_msg = await query.edit_message_media(media=media, reply_markup=kb)
+    except Exception:
+        # If edit fails (e.g. message is too old or wasn't media), try reply_photo
         try:
-            await query.answer(text=notice, show_alert=True)
-        except Exception:
-            await query.message.reply_text(notice, reply_markup=kb)
-        return
-
-    with open(img_path, "rb") as f:
-        media = InputMediaPhoto(media=f, caption=caption)
-        try:
-            sent_msg = await query.edit_message_media(media=media, reply_markup=kb)
-        except Exception:
             sent_msg = await query.message.reply_photo(
-                photo=open(img_path, "rb"), caption=caption, reply_markup=kb
+                photo=img_url, caption=caption, reply_markup=kb
             )
+        except Exception as e:
+            logger.error("Failed to send mushaf page via URL %s: %s", img_url, e)
+            await query.answer(text=t("mushaf_not_available", lang, page=page_num, source=src_name), show_alert=True)
+            return
 
-    # Cache the file_id Telegram assigned
+    # 3. Cache the file_id Telegram assigned
     try:
         if hasattr(sent_msg, "photo") and sent_msg.photo:
             _save_id(source, page_num, sent_msg.photo[-1].file_id)
