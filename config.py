@@ -118,18 +118,9 @@ TAFSIR_SOURCES: dict[str, dict] = {
 # Cache:  DATA_DIR/images/{key}/ids.json         → {"1": "file_id", ...}
 DEFAULT_PAGE_SOURCE = "hafs"
 PAGE_SOURCES: dict[str, dict] = {
-    "hafs": {
-        "ar": "مصحف حفص", "en": "Hafs",
-        "url": "https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/ayat/hafs/{page}.png"
-    },
-    "warsh": {
-        "ar": "مصحف ورش", "en": "Warsh",
-        "url": "https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/ayat/warsh/{page}.png"
-    },
-    "tajweed": {
-        "ar": "مصحف التجويد", "en": "Color Tajweed",
-        "url": "https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/ayat/tajweed/{page}.png"
-    },
+    "hafs":    {"ar": "مصحف حفص",        "en": "Hafs (IndoPak)"},
+    "warsh":   {"ar": "مصحف ورش",        "en": "Warsh"},
+    "tajweed": {"ar": "مصحف التجويد",    "en": "Color Tajweed"},
 }
 
 # ── Hadith databases ──────────────────────────────────────────────────────────
@@ -214,8 +205,8 @@ VIDEO_DEFAULT_BG = "parchment"
 # ── File-ID key index helpers ─────────────────────────────────────────────────
 # Compact integer indices keep keys short and legible.
 _FONT_LIST    = ["uthmani", "amiri", "noto"]
-_IMG_THEME    = ["parchment", "night", "dark"]
-_VID_THEME    = ["parchment", "night", "dark"]
+_IMG_THEME    = ["parchment", "dark", "night"]
+_VID_THEME    = ["dark", "parchment", "night"]
 _IMG_RES      = ["auto", "portrait", "landscape"]
 _VID_RATIO    = ["portrait", "landscape"]
 
