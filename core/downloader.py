@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 def download_audio(voice: str, sura: int, aya: int) -> Path | None:
     url  = f"{AUDIO_API}/{voice}/{sura:03d}{aya:03d}.mp3"
-    path = DATA_DIR / "audio" / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
+    path = AUDIO_DIR / voice / str(sura) / f"{sura:03d}{aya:03d}.mp3"
     if path.exists():
         return path
     path.parent.mkdir(parents=True, exist_ok=True)

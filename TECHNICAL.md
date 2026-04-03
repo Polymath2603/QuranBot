@@ -12,9 +12,12 @@ QuranBot/
 ├── config.py           # Every constant in one place — edit here, not in modules
 ├── core/
 │   ├── audio.py        # gen_mp3(): download per-verse MP3s → FFmpeg concat + strip
-│   ├── video.py        # gen_video(): Pillow PNGs → 3-pass FFmpeg pipeline (black -> colorkey)
+│   ├── video.py        # gen_video(): Dynamic template loading → FFmpeg graph (compositing)
+│   ├── video_templates/ # Modular rendering styles (default, enhanced)
+│   │   ├── default.py   # Standard verse rendering
+│   │   └── enhanced.py  # Sura name glyphs & permanent overlays
 │   ├── image.py        # gen_verse_image(): portrait (default) PNG, font/theme/resolution
-│   ├── mushaf.py       # send_mushaf_page(): local PNG → file_id cache → Telegram
+│   ├── mushaf.py       # send_mushaf_page(): remote API or local PNG → file_id cache
 │   ├── verses.py       # build_verse_keyboard(), send helpers, text formatting
 │   ├── subtitles.py    # SRT / LRC export with real ffprobe timestamps
 │   ├── nlu.py          # Natural language parser — suras, ranges, pages, search
@@ -52,7 +55,13 @@ QuranBot/
 ├── bin/                         # (optional) Local ffmpeg/ffprobe static binaries
 ├── .env
 ├── .env.example
-└── requirements.txt
+├── .video_settings.json # (ignored) Persisted GUI settings
+├── video_gui.py         # Standalone Desktop app (Tkinter)
+├── video_cli.py         # Headless generation tool (argparse)
+├── README.md
+├── README.ar.md
+├── requirements.txt
+└── TECHNICAL.md
 ```
 
 ---
@@ -127,15 +136,23 @@ No image generation for mushaf pages. Not affected by text format settings.
 
 ### Video pipeline
 
-```
-gen_video():
-  1. Render each verse as PNG frame (_render_frame — solid black background #000000)
-  2. Encode each PNG → verse clip with fade-in/out (FFmpeg: libx264 ultrafast)
-  3. Concat clips → silent text track (concat demuxer, -c:v copy)
-  4. Final pass: real background (e.g. parchment) + text track + audio → output MP4 applying colorkey=black:0.05:0.1.
-  - HW Acceleration: Auto-detects NVENC (NVIDIA), VAAPI (Linux), or VideoToolbox (macOS) for the final composite pass (-c:v).
-  -threads 2 throughout; minimal RAM footprint
-```
+`gen_video()` now uses a **Modular Template System**:
+
+1. **Preprocessing**:
+   - Audio is fetched and concatenated using `gen_mp3()`.
+   - Per-verse alignments are loaded from `core/subtitles.py`.
+2. **Template Loading**:
+   - `core/video.py` dynamically imports a template module (e.g., `core/video_templates/enhanced.py`).
+   - The template provides a `render_frame()` function and optional `get_static_overlay()`.
+3. **Rendering & Compositing**:
+   - Verses are rendered into temporary PNG sequences via the template.
+   - If a static overlay (e.g., Sura name glyphs) is provided, it is pre-rendered once.
+   - FFmpeg Filter Graph:
+     - `[bg0][static]overlay[bg]` → Injects the permanent non-fading layer.
+     - Dynamic text layers are composited on top using the video background (Image, Video, or Solid Color).
+4. **Encoding**:
+   - Leverages Hardware Acceleration (`nvenc`, `vaapi`, `videotoolbox`) automatically.
+   - Outputs to `DATA_DIR/videos` aligned with the bot's storage.
 
 ### Audio pipeline
 

@@ -616,8 +616,8 @@ async def _process_queue_item(bot, item_id: int):
             await _edit_pos("🎧\n▱▱▱▱▱ 0%")
             async def _ea(text): await _edit_pos(text)
             def _gen_audio():
-                check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
-                return gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
+                check_and_purge_storage(AUDIO_DIR, OUTPUT_DIR)
+                return gen_mp3(AUDIO_DIR, OUTPUT_DIR, quran_data, reciter_code,
                                sura, start_aya, sura, end_aya, title=title, artist=reciter,
                                progress_cb=make_progress_cb(_ea, loop, icon="🎧"))
             mp3_path = await loop.run_in_executor(_WORKER_POOL, _gen_audio)
@@ -656,13 +656,13 @@ async def _process_queue_item(bot, item_id: int):
             await _edit_pos("🎬\n▱▱▱▱▱ 0%")
             async def _ev(text): await _edit_pos(text)
             def _gen_video():
-                check_and_purge_storage(DATA_DIR / "audio", OUTPUT_DIR)
-                mp3        = gen_mp3(DATA_DIR / "audio", OUTPUT_DIR, quran_data, reciter_code,
+                check_and_purge_storage(AUDIO_DIR, OUTPUT_DIR)
+                mp3        = gen_mp3(AUDIO_DIR, OUTPUT_DIR, quran_data, reciter_code,
                                     sura, start_aya, sura, end_aya, title=title, artist=reciter)
                 start_idx  = get_sura_start_index(quran_data, sura)
                 vtexts     = [verses[start_idx + i - 1]
                                for i in range(start_aya, end_aya + 1)]
-                vdurs      = get_verse_durations(DATA_DIR / "audio", reciter_code, sura, start_aya, end_aya)
+                vdurs      = get_verse_durations(AUDIO_DIR, reciter_code, sura, start_aya, end_aya)
                 return gen_video(
                     vtexts, start_aya, sura,
                     voice=reciter_code, audio_path=mp3,
@@ -958,7 +958,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if fmt in ("srt", "lrc"):
         voice = user.voice or DEFAULT_VOICE
         durs  = await asyncio.to_thread(
-            get_verse_durations, DATA_DIR / "audio", voice, sura, start, end,
+            get_verse_durations, AUDIO_DIR, voice, sura, start, end,
         )
 
     if start == end:

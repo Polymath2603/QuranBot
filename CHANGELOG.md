@@ -2,6 +2,27 @@
 
 ---
 
+## 🟢 2026-03-30 — Phase 12-15: Standalone Video Engine & Docs Refresh
+
+### ✨ Added
+- **Standalone Video GUI** (`video_gui.py`): Tkinter-based desktop application with settings persistence, dynamic ayah range, and native file pickers.
+- **Standalone Video CLI** (`video_cli.py`): Command-line tool for headless video generation.
+- **Modular Template System**: `core/video_templates/` for flexible rendering styles.
+- **Enhanced Template**: Added permanent sura name overlays using special glyph fonts and heart symbols.
+- **Advanced FFmpeg Graph**: Support for static overlays, background videos, and randomized folder backgrounds.
+- **Settings Persistence**: `.video_settings.json` stores last-used GUI configuration.
+
+### 🔄 Changed
+- Refactored `gen_video` to support dynamic rendering templates.
+- Aligned GUI/CLI outputs with the central `DATA_DIR/videos`.
+- Updated `.gitignore` to remove legacy boilerplate and include tool settings.
+
+### 📚 Documentation
+- Full rewrite of `README.md` and `README.ar.md` to include desktop tool instructions.
+- Updated `TECHNICAL.md` with new architecture and video pipeline details.
+
+---
+
 ## 🟢 2026-03-16 — Search Intelligence, Resource Expansion & Font Update
 
 ### ✨ Added

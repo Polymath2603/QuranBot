@@ -14,14 +14,16 @@ load_dotenv()
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent
 DATA_DIR   = BASE_DIR / "data"
+AUDIO_DIR   = DATA_DIR / "audio"
 OUTPUT_DIR = BASE_DIR / "output"
 LOCALE_DIR = BASE_DIR / "locales"
 
 # ── Bot credentials (from .env) ───────────────────────────────────────────────
 BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
-CHANNEL_URL = os.getenv("CHANNEL_URL", "")
+CHANNEL_URL = os.getenv("CHANNEL_URL", "") 
 CHANNEL_ID  = os.getenv("CHANNEL_ID", "")
 DONATE_URL  = os.getenv("DONATE_URL", "")   # link to donation post
+USERNAME    = os.getenv("PAGE_USERNAME", "")
 
 # ── API endpoints ─────────────────────────────────────────────────────────────
 AUDIO_API = "https://everyayah.com/data"
@@ -146,6 +148,9 @@ FONT_PATHS: dict[str, str] = {
     "amiri":   str(DATA_DIR / "Amiri-Regular.ttf"),
     "noto":    str(DATA_DIR / "NotoNaskhArabic-Regular.ttf"),
 }
+
+CUSTOM_FONT_PATH =  str(DATA_DIR / "QuranBot_Custom_Font.ttf")
+
 FONT_SETTINGS: dict[str, dict] = {
     "uthmani": {"clean": True,  "num": "arabic",  "brackets": False},
     "amiri":   {"clean": True, "num": "western", "brackets": True},
@@ -200,7 +205,27 @@ VIDEO_BACKGROUNDS: dict[str, str] = {
     "parchment": "0xF2DFB9",
     "night":     "0x0F192D",
 }
-VIDEO_DEFAULT_BG = "parchment"
+VIDEO_DEFAULT_BG = "night"
+
+# ── Video Tool Defaults (GUI/CLI) ─────────────────────────────────────────────
+VIDEO_SETTINGS_FILE = BASE_DIR / ".video_settings.json"
+
+VIDEO_TOOL_DEFAULTS = {
+    "sura": 1,
+    "start": 1,
+    "end": 7,
+    "voice": DEFAULT_VOICE,
+    "font": "uthmani",
+    "template": "enhanced",
+    "text_color": "#FFFFFF",
+    "border_width": 1,
+    "border_color": "#000000",
+    "bg_mode": "folder",
+    "bg_color": "#0F192D",
+    "bg_path": str(DATA_DIR / "backgrounds"),
+    "bg_behavior": "permanent",
+    "ratio": "portrait",
+}
 
 # ── File-ID key index helpers ─────────────────────────────────────────────────
 # Compact integer indices keep keys short and legible.

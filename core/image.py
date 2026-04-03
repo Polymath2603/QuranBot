@@ -68,10 +68,10 @@ def basmala_for_font(verse_text: str, font_key: str) -> str:
 
 _font_cache: dict[tuple, ImageFont.FreeTypeFont] = {}
 
-def get_font(key: str, size: int) -> ImageFont.FreeTypeFont:
+def get_font(key: str, size: int, custom_path:str|None=None) -> ImageFont.FreeTypeFont:
     ck = (key, size)
     if ck not in _font_cache:
-        path = FONT_PATHS.get(key, FONT_PATHS[IMAGE_DEFAULT_FONT])
+        path = custom_path or FONT_PATHS.get(key, FONT_PATHS[IMAGE_DEFAULT_FONT])
         try:
             _font_cache[ck] = ImageFont.truetype(path, size)
         except (IOError, OSError):

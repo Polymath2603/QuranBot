@@ -69,79 +69,7 @@ def _detect_hw_encoder() -> tuple[str, list[str]]:
 _HW_ENC, _HW_ENC_ARGS = _detect_hw_encoder()
 
 
-def _render_frame(text: str, size: tuple, font_key: str, bg_key: str):
-    """Render one video frame PNG at a fixed (W, H) canvas size.
-
-    Unlike image.py's auto-height render, video needs every frame the same
-    fixed resolution so FFmpeg can concat them without rescaling.
-    """
-    from PIL import Image as PILImage, ImageDraw as PILDraw
-    from config import VIDEO_PADDING as PADDING, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
-    fixed_w, fixed_h  = size
-    max_w = fixed_w - 2 * PADDING
-    max_h = fixed_h - 2 * PADDING
-    bg    = (0, 0, 0, 0)
-    fg    = IMAGE_TEXT_COLORS.get(bg_key, IMAGE_TEXT_COLORS[IMAGE_DEFAULT_BG])
-
-    img  = PILImage.new("RGBA", size, bg)
-    draw = PILDraw.Draw(img)
-
-    fs = 38
-    chosen_lines = []
-    chosen_fs    = 38
-
-    # Find largest font size that fits width
-    while fs >= 24:
-        # Create a dummy ImageDraw object for text measurement
-        probe = PILImage.new("RGBA", (1, 1))
-        draw_probe  = PILDraw.Draw(probe)
-        font  = get_font(font_key, fs)
-        lines, ok = [], True
-        for para in text.split("\n"):
-            pl = wrap_text(draw_probe, para.strip(), font, max_w)
-            for line in pl:
-                if get_text_width(draw_probe, line, font) > max_w:
-                    ok = False; break
-            if not ok: break
-            lines.extend(pl)
-        if ok:
-            line_h = int(fs * 1.45)
-            if len(lines) * line_h <= max_h:
-                chosen_lines = lines
-                chosen_fs = fs
-                break
-        # Try a slightly smaller font size next
-        fs -= 2
-
-    # If no font size fits, use the smallest and let it overflow
-    if not chosen_lines:
-        fs = 24
-        font = get_font(font_key, fs)
-        probe = PILImage.new("RGBA", (1, 1))
-        draw_probe  = PILDraw.Draw(probe)
-        chosen_lines = wrap_text(draw_probe, text, font, max_w)
-        chosen_fs = fs
-
-    font    = get_font(font_key, chosen_fs)
-    line_h  = int(chosen_fs * 1.45)
-    total_h = len(chosen_lines) * line_h
-    y       = (fixed_h - total_h) // 2
-
-    for ln in chosen_lines:
-        if not ln.strip():
-            y += line_h; continue
-        lw = get_text_width(draw, ln, font)
-        x  = (fixed_w - lw) // 2
-        try:
-            draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
-        except KeyError:
-            # Fallback for systems without libraqm
-            draw.text((x, y), ln, font=font, fill=fg)
-        y += line_h
-
-    del draw
-    return img
-
+# _render_frame has been moved to core/video_templates/
 
 def _build_entries(verses_list: list, start_aya: int, verse_durations: list,
                    sura: int = 0, font_key: str = "uthmani") -> list:
@@ -216,6 +144,14 @@ def gen_video(
     font_key: str           = VIDEO_DEFAULT_FONT,
     verse_durations: list   = None,
     progress_cb             = None,
+    # New GUI parameters with defaults for backward-compat
+    bg_mode: str            = "theme",
+    bg_path: str            = "",
+    bg_behavior: str        = "permanent",
+    text_color: tuple | None = None,
+    stroke_width: int       = 0,
+    stroke_color: tuple     = (0,0,0,255),
+    template: str           = "default",
 ) -> Path:
     """
     Generate a video for the given verses.
@@ -257,12 +193,27 @@ def gen_video(
 
     with tempfile.TemporaryDirectory() as _tmp:
         tmp = Path(_tmp)
+        
+        import importlib
+        try:
+            tmpl_mod = importlib.import_module(f"core.video_templates.{template}")
+        except ImportError:
+            tmpl_mod = importlib.import_module("core.video_templates.default")
+            
+        static_overlay_path = None
+        if hasattr(tmpl_mod, "render_permanent_overlay"):
+            _progress(0, "rendering static overlay…")
+            static_img = tmpl_mod.render_permanent_overlay(size=size, sura=sura, text_color=text_color, stroke_width=stroke_width, stroke_color=stroke_color)
+            if static_img:
+                static_overlay_path = tmp / "static_overlay.png"
+                static_img.save(str(static_overlay_path))
+                static_img.close()
 
         # ── Step 1: Render verse PNGs (0–20%) ─────────────────────────────
         pngs = []
         n    = len(entries)
         for idx, entry in enumerate(entries):
-            img = _render_frame(text=entry["text"], size=size, font_key=font_key, bg_key=bg_key)
+            img = tmpl_mod.render_verse_frame(text=entry["text"], size=size, font_key=font_key, bg_key=bg_key, text_color=text_color, stroke_width=stroke_width, stroke_color=stroke_color)
             p   = tmp / f"verse_{idx:04d}.png"
             img.save(str(p))
             img.close()          # free PIL memory immediately
@@ -310,41 +261,80 @@ def gen_video(
         sync = VIDEO_SYNC_OFFSET
         txt_inputs = ["-i", str(text_track)]
         
-        from config import VIDEO_BACKGROUNDS
-        bg_hex = VIDEO_BACKGROUNDS.get(bg_key, VIDEO_BACKGROUNDS[VIDEO_DEFAULT_BG])
-        filters = [
-            f"color=c={bg_hex}:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg]",
-            (f"[0:v]"
+        bg_inputs = []
+        
+        # Handle "folder" by picking a random media (permanent for now)
+        if bg_mode == "folder" and bg_path:
+            import random
+            folder = Path(bg_path)
+            media_files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in ('.jpg','.png','.jpeg','.mp4','.mov')]
+            if media_files:
+                choice = random.choice(media_files)
+                bg_path = str(choice)
+                if choice.suffix.lower() in ('.mp4', '.mov'):
+                    bg_mode = "video"
+                else:
+                    bg_mode = "image"
+            else:
+                bg_mode = "color"
+                bg_path = "#0F192D"
+
+        inputs_args = ["-i", str(text_track)]
+        idx_txt = 0
+        
+        idx_bg = None
+        if bg_mode in ("image", "video") and bg_path:
+            bg_cmd = ["-stream_loop", "-1", "-i", bg_path] if bg_mode == "video" else ["-loop", "1", "-i", bg_path]
+            inputs_args.extend(bg_cmd)
+            idx_bg = 1
+
+        idx_static = None
+        if static_overlay_path:
+            inputs_args.extend(["-loop", "1", "-i", str(static_overlay_path)])
+            idx_static = 2 if idx_bg is not None else 1
+
+        has_audio = bool(audio_path and Path(audio_path).exists())
+        idx_audio = None
+        if has_audio:
+            inputs_args.extend(["-i", str(audio_path)])
+            idx_audio = len(inputs_args) // 2 - 1 if "-loop" not in inputs_args[-3:] else (2 if idx_static else (1 if idx_bg else 1)) # simplistic map parsing
+            # Safest logic since FFmpeg inputs count incrementally for each "-i"
+            idx_audio = sum(1 for a in inputs_args if a == "-i") - 1
+
+        if bg_mode == "theme":
+            from config import VIDEO_BACKGROUNDS
+            hex_col = VIDEO_BACKGROUNDS.get(bg_key, VIDEO_BACKGROUNDS[VIDEO_DEFAULT_BG])
+            filters = [f"color=c={hex_col}:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg0]"]
+        elif bg_mode == "color":
+            hex_col = bg_path if bg_path.startswith('#') else f"#{bg_path}"
+            filters = [f"color=c={hex_col}:size={vw}x{vh}:rate={VIDEO_FPS}:duration={total_dur:.4f}[bg0]"]
+        else:
+            filters = [f"[{idx_bg}:v]scale={vw}:{vh}:force_original_aspect_ratio=increase,crop={vw}:{vh},setpts=PTS-STARTPTS,trim=0:{total_dur:.4f},setsar=1[bg0]"]
+
+        if static_overlay_path:
+            filters.append(f"[bg0][{idx_static}:v]overlay=0:0:shortest=1[bg]")
+        else:
+            filters.append(f"[bg0]copy[bg]")
+
+        filters.extend([
+            (f"[{idx_txt}:v]"
              f"setpts=PTS+{sync}/TB,"
              f"trim=start=0:end={total_dur:.4f},"
              f"setpts=PTS-STARTPTS,"
              f"scale={vw}:{vh},setsar=1[txt]"),
             f"[bg][txt]overlay=0:0:format=auto,trim=0:{total_dur:.4f},setpts=PTS-STARTPTS[vout]",
-        ]
+        ])
 
-        has_audio = bool(audio_path and Path(audio_path).exists())
-
-        if has_audio:
-            _run([
-                *txt_inputs,
-                "-i", str(audio_path),
-                "-filter_complex", "; ".join(filters),
-                "-map", "[vout]",
-                "-map", "1:a",
-                "-c:v", _HW_ENC, *_HW_ENC_ARGS, "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "128k",
-                "-t", str(total_dur),
-                str(out_path),
-            ])
-        else:
-            _run([
-                *txt_inputs,
-                "-filter_complex", "; ".join(filters),
-                "-map", "[vout]",
-                "-c:v", _HW_ENC, *_HW_ENC_ARGS, "-pix_fmt", "yuv420p",
-                "-t", str(total_dur),
-                str(out_path),
-            ])
+        _run([
+            *inputs_args,
+            "-filter_complex", "; ".join(filters),
+            "-map", "[vout]",
+            *(["-map", f"{idx_audio}:a"] if has_audio else []),
+            "-c:v", _HW_ENC, *_HW_ENC_ARGS, "-pix_fmt", "yuv420p",
+            *(["-c:a", "aac", "-b:a", "128k"] if has_audio else []),
+            "-t", str(total_dur),
+            str(out_path),
+        ])
 
         _progress(100, "done")
 
