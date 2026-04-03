@@ -84,7 +84,7 @@ class VideoGenApp(tk.Tk):
         try:
             sura_str = self.sura_var.get().split(" - ")[0]
             sura = int(sura_str)
-            max_aya = int(QURAN_DATA["Sura"][str(sura)][1])
+            max_aya = int(QURAN_DATA["Sura"][sura][1])
             self.end_aya_var.set(str(max_aya))
         except: pass
 

@@ -70,7 +70,7 @@ async def main():
     start = args.start
     end = args.end
     
-    max_aya = int(QURAN_DATA["Sura"][str(sura)][1])
+    max_aya = int(QURAN_DATA["Sura"][sura][1])
     if start < 1 or end > max_aya or start > end:
         print(f"Error: Invalid Ayah range. Sura {sura} has {max_aya} Ayahs.")
         sys.exit(1)
