@@ -63,6 +63,10 @@ async def main():
     parser.add_argument("-o", "--output", help="Output filename (optional)")
     parser.add_argument("-r", "--ratio", default=d["ratio"], choices=["portrait", "landscape"], help="Aspect ratio")
 
+    if len(sys.argv) == 1 or "help" in sys.argv:
+        parser.print_help()
+        sys.exit(0)
+
     args = parser.parse_args()
 
     # Validation
