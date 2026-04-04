@@ -1,6 +1,6 @@
 from PIL import Image as PILImage, ImageDraw as PILDraw
 from config import VIDEO_PADDING as PADDING, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
-from core.image import get_font, wrap_text, get_text_width
+from core.image import get_font, wrap_text, get_text_width, draw_arabic_line
 
 def render_verse_frame(text: str, size: tuple, font_key: str, bg_key: str, text_color: tuple = None, stroke_width: int = 0, stroke_color: tuple = (0,0,0,255)):
     fixed_w, fixed_h  = size
@@ -54,10 +54,7 @@ def render_verse_frame(text: str, size: tuple, font_key: str, bg_key: str, text_
             y += line_h; continue
         lw = get_text_width(draw, ln, font)
         x  = (fixed_w - lw) // 2
-        try:
-            draw.text((x, y), ln, font=font, fill=fg, direction="rtl", stroke_width=stroke_width, stroke_fill=stroke_color)
-        except KeyError:
-            draw.text((x, y), ln, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
+        draw_arabic_line(draw, (x, y), ln, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
         y += line_h
 
     del draw

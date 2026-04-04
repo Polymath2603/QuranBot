@@ -14,3 +14,6 @@ Pillow>=10.0.0
 
 # JSON5 (quran-data.json uses JS comment syntax)
 json5
+# Shaping fallback for systems without libraqm
+arabic-reshaper>=3.0.0
+python-bidi>=0.4.2

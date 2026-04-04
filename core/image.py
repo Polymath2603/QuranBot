@@ -20,7 +20,8 @@ import logging
 import re
 from io import BytesIO
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, features
+RAQM_AVAILABLE = features.check('raqm')
 
 from config import (
     FONT_PATHS, IMAGE_DEFAULT_FONT,
@@ -84,8 +85,33 @@ def get_font(key: str, size: int, custom_path:str|None=None) -> ImageFont.FreeTy
 
 # ── Text measurement ──────────────────────────────────────────────────────────
 
+def _reshape_line(text: str) -> str:
+    """Fallback: Reshape and reorder Arabic text for systems without libraqm."""
+    if RAQM_AVAILABLE:
+        return text
+    try:
+        from arabic_reshaper import reshape
+        from bidi.algorithm import get_display
+        return get_display(reshape(text))
+    except ImportError:
+        return text
+
+def draw_arabic_line(draw: ImageDraw.ImageDraw, xy: tuple, text: str, font, fill, direction="rtl", **kwargs):
+    """Unified Arabic text drawer with automatic raqm/bidi fallback."""
+    if RAQM_AVAILABLE:
+        try:
+            draw.text(xy, text, font=font, fill=fill, direction=direction, **kwargs)
+            return
+        except KeyError:
+            pass
+    
+    # Fallback to manual shaping (LTR)
+    shaped = _reshape_line(text)
+    draw.text(xy, shaped, font=font, fill=fill, **kwargs)
+
 def get_text_width(draw: ImageDraw.ImageDraw, text: str, font) -> int:
-    bb = draw.textbbox((0, 0), text, font=font)
+    shape_txt = _reshape_line(text)
+    bb = draw.textbbox((0, 0), shape_txt, font=font)
     return int(bb[2] - bb[0])
 
 
@@ -262,12 +288,8 @@ def render_verse_png(
         lw = get_text_width(draw, ln, font)
         x  = (canvas_w - lw) // 2
 
-        # Slight stroke to increase font weight artificially
-        try:
-            draw.text((x, y), ln, font=font, fill=fg, direction="rtl")
-        except KeyError:
-            # Fallback for systems without libraqm
-            draw.text((x, y), ln, font=font, fill=fg)
+        # Unified renderer replaces try...except blocks
+        draw_arabic_line(draw, (x, y), ln, font=font, fill=fg)
         y += line_h
 
     del draw

@@ -1,7 +1,7 @@
 from random import randint
 from PIL import Image as PILImage, ImageDraw as PILDraw
 from config import VIDEO_PADDING as PADDING, USERNAME, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG, CUSTOM_FONT_PATH
-from core.image import get_font, wrap_text, get_text_width
+from core.image import get_font, wrap_text, get_text_width, draw_arabic_line
 
 def render_verse_frame(text: str, size: tuple, font_key: str, bg_key: str, text_color: tuple = None, stroke_width: int = 0, stroke_color: tuple = (0,0,0,255)):
     # Uses exact same logic for verse frames as standard
@@ -56,10 +56,7 @@ def render_verse_frame(text: str, size: tuple, font_key: str, bg_key: str, text_
             y += line_h; continue
         lw = get_text_width(draw, ln, font)
         x  = (fixed_w - lw) // 2
-        try:
-            draw.text((x, y), ln, font=font, fill=fg, direction="rtl", stroke_width=stroke_width, stroke_fill=stroke_color)
-        except KeyError:
-            draw.text((x, y), ln, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
+        draw_arabic_line(draw, (x, y), ln, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
         y += line_h
 
     del draw
@@ -103,12 +100,9 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
             # Only use direction="rtl" for Arabic text; Latin text (like username) should be LTR
             # is_arabic = any('\u0600' <= c <= '\u06FF' for c in line)
             is_arabic = any('\u0080' <= c <= '\u00F2' for c in line)
-            try:
-                if is_arabic:
-                    draw.text((x, current_y), line, font=font, fill=fg, direction="rtl", stroke_width=stroke_width, stroke_fill=stroke_color)
-                else:
-                    draw.text((x, current_y), line, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
-            except KeyError:
+            if is_arabic:
+                draw_arabic_line(draw, (x, current_y), line, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
+            else:
                 draw.text((x, current_y), line, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
             current_y += line_h
         
