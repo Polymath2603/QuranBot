@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ── File-id cache per source ─────────────────────────────────────────────────
 
 def _ids_path(source: str) -> Path:
-    return DATA_DIR / "images" / source / "ids.json"
+    return DATA_DIR / f"{source}_pages.json"
 
 
 def _load_ids(source: str) -> dict[str, str]:

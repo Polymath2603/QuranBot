@@ -71,7 +71,7 @@ ADMIN_IDS: list = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.st
 
 # ── Voices / reciters ─────────────────────────────────────────────────────────
 # Each entry: code → {ar: Arabic name, en: English name}
-DEFAULT_VOICE = "Alafasy_64kbps"
+DEFAULT_VOICE = "Nasser_Alqatami_128kbps"
 VOICES: dict[str, dict] = {
     # Preferred qualities (64kbps or 128kbps)
     "Alafasy_64kbps":                 {"ar": "مشاري العفاسي",         "en": "Mishary Alafasy"},
@@ -117,12 +117,10 @@ TAFSIR_SOURCES: dict[str, dict] = {
 
 # ── Mushaf page image sources ─────────────────────────────────────────────────
 # Files:  DATA_DIR/images/{key}/{page_num}.png   (1-604)
-# Cache:  DATA_DIR/images/{key}/ids.json         → {"1": "file_id", ...}
+# Cache:  DATA_DIR/hafs_pages.json               → {"1": "file_id", ...}
 DEFAULT_PAGE_SOURCE = "hafs"
 PAGE_SOURCES: dict[str, dict] = {
     "hafs":    {"ar": "مصحف حفص",        "en": "Hafs (IndoPak)"},
-    "warsh":   {"ar": "مصحف ورش",        "en": "Warsh"},
-    "tajweed": {"ar": "مصحف التجويد",    "en": "Color Tajweed"},
 }
 
 # ── Hadith databases ──────────────────────────────────────────────────────────

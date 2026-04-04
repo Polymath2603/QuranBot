@@ -38,10 +38,8 @@ async def main():
     
     parser = argparse.ArgumentParser(description="Quran Video Generator CLI")
     
-    # Selection
-    parser.add_argument("-s", "--sura", type=int, default=d["sura"], help="Sura number (1-114)")
-    parser.add_argument("-start", "--start", type=int, default=d["start"], help="Start Ayah")
-    parser.add_argument("-end", "--end", type=int, default=d["end"], help="End Ayah")
+    # Selection: sura, sura:aya, or sura:start-end
+    parser.add_argument("selection", nargs="?", help="Selection: 'sura' (e.g. 1), 'sura:aya' (e.g. 1:1), or 'sura:start-end' (e.g. 1:1-7)")
     
     # Style
     parser.add_argument("-v", "--voice", default=d["voice"], choices=list(VOICES.keys()), help="Reciter voice")
@@ -63,17 +61,35 @@ async def main():
     parser.add_argument("-o", "--output", help="Output filename (optional)")
     parser.add_argument("-r", "--ratio", default=d["ratio"], choices=["portrait", "landscape"], help="Aspect ratio")
 
-    if len(sys.argv) == 1 or "help" in sys.argv:
+    if len(sys.argv) == 1 or "--help" in sys.argv or "-h" in sys.argv:
         parser.print_help()
         sys.exit(0)
 
     args = parser.parse_args()
 
+    # Parse Selection
+    sura = d["sura"]
+    start = d["start"]
+    end = d["end"]
+
+    if args.selection:
+        if ":" in args.selection:
+            sura_str, range_str = args.selection.split(":", 1)
+            sura = int(sura_str)
+            if "-" in range_str:
+                start_str, end_str = range_str.split("-", 1)
+                start = int(start_str)
+                end = int(end_str)
+            else:
+                start = int(range_str)
+                end = start
+        else:
+            sura = int(args.selection)
+            max_aya = int(QURAN_DATA["Sura"][sura][1])
+            start = 1
+            end = max_aya
+
     # Validation
-    sura = args.sura
-    start = args.start
-    end = args.end
-    
     max_aya = int(QURAN_DATA["Sura"][sura][1])
     if start < 1 or end > max_aya or start > end:
         print(f"Error: Invalid Ayah range. Sura {sura} has {max_aya} Ayahs.")
