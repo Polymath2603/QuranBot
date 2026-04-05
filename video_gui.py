@@ -20,7 +20,7 @@ from config import (
 from core.data import load_quran_data, load_quran_text_simple, get_sura_start_index
 from core.audio import gen_mp3
 from core.subtitles import get_verse_durations
-from core.video import gen_video
+from core.video import gen_video, get_video_filename
 
 QURAN_DATA = load_quran_data(DATA_DIR)
 VERSES_SIMPLE = load_quran_text_simple(DATA_DIR)
@@ -379,7 +379,18 @@ class VideoGenApp(tk.Tk):
         voice = self.voice_var.get()
         
         if not self.out_file_var.get():
-            auto_name = f"quran_{sura:03d}_{start:03d}_{end:03d}_{voice}.mp4"
+            # Use shared naming logic for auto-name
+            bg_tag = self.bg_mode_var.get()[:3]
+            tc_rgba = self.hex_to_rgba(self.text_color_var.get())
+            bc_rgba = self.hex_to_rgba(self.border_color_var.get())
+            bw = int(self.border_width_var.get())
+            bg_p = self.bg_path_var.get() if self.bg_mode_var.get() != "color" else self.bg_color_var.get()
+            
+            auto_name = get_video_filename(
+                voice, sura, start, end, self.ratio_var.get(), bg_tag, self.font_var.get(),
+                template=self.template_var.get(), bg_mode=self.bg_mode_var.get(), bg_path=bg_p,
+                text_color=tc_rgba, stroke_width=bw, stroke_color=bc_rgba
+            )
             out_path = OUTPUT_DIR / "local"
             out_path.mkdir(exist_ok=True, parents=True)
             self.out_file_var.set(str(out_path / auto_name))
@@ -402,11 +413,10 @@ class VideoGenApp(tk.Tk):
             self.update_progress(5, "Downloading audio and extracting alignments...")
             
             out_file = Path(self.out_file_var.get())
-            out_dir = out_file.parent
             
             audio_path = gen_mp3(
                 audio_dir=AUDIO_DIR,
-                output_dir=out_dir,
+                output_dir=OUTPUT_DIR, # Bot's cache
                 quran_data=QURAN_DATA,
                 voice=voice,
                 start_sura=sura,
@@ -426,14 +436,13 @@ class VideoGenApp(tk.Tk):
             bc = self.hex_to_rgba(self.border_color_var.get())
             bw = int(self.border_width_var.get())
             
-            # Instead of returning a path like the bot does, we can move the cached result
             cache_path = gen_video(
                 verses_list=verses,
                 start_aya=start,
                 sura=sura,
                 voice=voice,
                 audio_path=audio_path,
-                output_dir=out_file.parent,
+                output_dir=OUTPUT_DIR, # Bot's cache
                 ratio=self.ratio_var.get(),
                 bg_mode=self.bg_mode_var.get(),
                 bg_path=self.bg_path_var.get() if self.bg_mode_var.get() != "color" else self.bg_color_var.get(),
@@ -447,10 +456,10 @@ class VideoGenApp(tk.Tk):
                 progress_cb=self.update_progress
             )
             
-            # if cache_path != out_file:
-            #     import shutil
-            #     shutil.copy2(cache_path, out_file)
-            out_file = cache_path
+            if cache_path.resolve() != out_file.resolve():
+                import shutil
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cache_path, out_file)
             
             self.update_progress(100, "Done! Video saved.")
             messagebox.showinfo("Success", f"Video exported to:\n{out_file}")

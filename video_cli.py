@@ -17,7 +17,7 @@ from config import (
 from core.data import load_quran_data, load_quran_text_simple, get_sura_start_index
 from core.audio import gen_mp3
 from core.subtitles import get_verse_durations
-from core.video import gen_video
+from core.video import gen_video, get_video_filename
 
 QURAN_DATA = load_quran_data(DATA_DIR)
 VERSES_SIMPLE = load_quran_text_simple(DATA_DIR)
@@ -105,13 +105,24 @@ async def main():
     if args.output:
         out_file = Path(args.output)
     else:
-        out_file = out_dir / f"quran_{sura:03d}_{start:03d}_{end:03d}_{args.voice}.mp4"
+        # Use shared naming logic for auto-name
+        bg_tag = args.bg_mode if args.bg_mode != "color" else "col"
+        tc_rgba = hex_to_rgba(args.text_color)
+        bc_rgba = hex_to_rgba(args.border_color)
+        bg_p = args.bg_path if args.bg_mode != "color" else args.bg_color
+
+        auto_name = get_video_filename(
+            args.voice, sura, start, end, args.ratio, bg_tag, args.font,
+            template=args.template, bg_mode=args.bg_mode, bg_path=bg_p,
+            text_color=tc_rgba, stroke_width=args.border_width, stroke_color=bc_rgba
+        )
+        out_file = out_dir / auto_name
 
     # Audio
     print("Step 1/3: Downloading/Processing audio...")
     audio_path = gen_mp3(
         audio_dir=AUDIO_DIR,
-        output_dir=out_file.parent,
+        output_dir=OUTPUT_DIR, # Use bot's cache dir
         quran_data=QURAN_DATA,
         voice=args.voice,
         start_sura=sura,
@@ -142,7 +153,7 @@ async def main():
         sura=sura,
         voice=args.voice,
         audio_path=audio_path,
-        output_dir=out_file.parent,
+        output_dir=OUTPUT_DIR, # Use bot's cache dir
         ratio=args.ratio,
         bg_mode=args.bg_mode,
         bg_path=bg_path,
@@ -158,12 +169,16 @@ async def main():
 
     # Step 3: Move to final destination
     print("\nStep 3/3: Finalizing...")
-    if cache_path != out_file:
+    if cache_path.resolve() != out_file.resolve():
         import shutil
+        out_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(cache_path, out_file)
         print(f"Success! Video saved to: {out_file}")
     else:
         print(f"Success! Video saved to: {cache_path}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 if __name__ == "__main__":
     asyncio.run(main())
