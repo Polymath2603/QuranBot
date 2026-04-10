@@ -72,8 +72,8 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
     
   
     # Text logic for sura glyphs and heart as requested
-    symbol = randint(123, 127)
-    title = f"{chr(128)}{chr(128+sura)}\n{chr(symbol)}"
+    symbol = randint(0xf3, 0xf7)
+    title = f"{chr(0x80)}{chr(0x80+sura)}\n{chr(symbol)}"
     ttitle_y = int(fixed_h * 0.2)
     fs1 = 46
     font1 = get_font("", fs1, CUSTOM_FONT_PATH)
