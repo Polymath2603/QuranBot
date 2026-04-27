@@ -29,15 +29,9 @@ USERNAME    = os.getenv("PAGE_USERNAME", "")
 AUDIO_API = "https://everyayah.com/data"
 QURAN_API = "https://api.alquran.cloud/v1"
 
-# ── FFmpeg — static builds in bin/ take priority over system install ──────────
-def _find_bin(name: str) -> str:
-    local = BASE_DIR / "bin" / name
-    if local.exists() and local.stat().st_mode & 0o111:
-        return str(local)
-    return name
-
-FFMPEG_BIN  = _find_bin("ffmpeg")
-FFPROBE_BIN = _find_bin("ffprobe")
+# ── FFmpeg — use system-installed ffmpeg/ffprobe ───────────────────────────────
+FFMPEG_BIN  = "ffmpeg"
+FFPROBE_BIN = "ffprobe"
 
 # ── HTTP / network ────────────────────────────────────────────────────────────
 HTTP_CONNECT_TIMEOUT = 30
