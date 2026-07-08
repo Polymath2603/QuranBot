@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.so
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+errors.json
+
+# Environment
+.env
+
+# Generated content
+data/audio/*
+!data/audio/.gitkeep
+data/backgrounds/*
+!data/backgrounds/.gitkeep
+data/images/*
+!data/images/.gitkeep
+output/*
+!output/.gitkeep
+
+# Tool settings
+.video_settings.json
+
+# Keep these tracked
+!data/Amiri-Regular.ttf
+!data/hafs.18.ttf
+!data/NotoNaskhArabic-Regular.ttf
+!data/QuranBot_Custom_Font.ttf
+!data/quran-data.json
+!data/quran-simple.txt
+!data/quran-uthmani.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Logs
+bot.log
+feedback.txt
