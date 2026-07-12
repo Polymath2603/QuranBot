@@ -30,7 +30,6 @@ async def _db_get(key: str) -> str | None:
             if age < CACHE_TTL:
                 await s.close()
                 return row.text
-            # Use execution to delete
             from sqlalchemy import delete
             await s.execute(delete(TafsirCache).filter_by(cache_key=key))
             await s.commit()

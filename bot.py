@@ -252,9 +252,6 @@ async def settings_other_handler(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
-# Logic for sub-menus remains the same, just updated the back buttons
-
-
 # ---------------------------------------------------------------------------
 # Settings — Video sub-menu
 # ---------------------------------------------------------------------------
@@ -308,10 +305,6 @@ async def settings_photo_handler(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
-
-# ---------------------------------------------------------------------------
-# Toggle handlers
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Generic List Selection

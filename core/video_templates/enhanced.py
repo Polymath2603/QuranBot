@@ -4,7 +4,6 @@ from config import VIDEO_PADDING as PADDING, USERNAME, IMAGE_TEXT_COLORS, IMAGE_
 from core.image import get_font, wrap_text, get_text_width, draw_arabic_line
 
 def render_verse_frame(text: str, size: tuple, font_key: str, bg_key: str, text_color: tuple = None, stroke_width: int = 0, stroke_color: tuple = (0,0,0,255)):
-    # Uses exact same logic for verse frames as standard
     fixed_w, fixed_h  = size
     max_w = fixed_w - 2 * PADDING
     max_h = fixed_h - 2 * PADDING
@@ -71,7 +70,6 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
     draw.rectangle([(0, 0), size], fill=(0, 0, 0, 127))
     
   
-    # Text logic for sura glyphs and heart as requested
     symbol = randint(0xf3, 0xf7)
     title = f"{chr(0x80)}{chr(0x80+sura)}\n{chr(symbol)}"
     ttitle_y = int(fixed_h * 0.2)
@@ -97,8 +95,6 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
                 continue
             lw = get_text_width(draw, line, font)
             x = (fixed_w - lw) // 2
-            # Only use direction="rtl" for Arabic text; Latin text (like username) should be LTR
-            # is_arabic = any('\u0600' <= c <= '\u06FF' for c in line)
             is_arabic = any('\u0080' <= c <= '\u00F2' for c in line)
             if is_arabic:
                 draw_arabic_line(draw, (x, current_y), line, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)

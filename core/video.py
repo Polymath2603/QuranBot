@@ -85,16 +85,11 @@ def _build_entries(verses_list: list, start_aya: int, verse_durations: list,
         aya_i      = start_aya + i
         num        = to_number(aya_i, font_key)
         stripped   = strip_basmala(verse, sura, aya_i) if sura else verse
-        # clean_verse removes Dagger Alif and Quranic pause/annotation marks
-        # to ensure a cleaner visual appearance in video frames.
         cleaned    = clean_verse(stripped, font_key)
         frame_text = f"{cleaned} {num}"
         entries.append({"text": frame_text, "start": t, "end": t + dur})
         t += dur
     return entries
-
-# Unused: _build_video_subtitle_text
-
 
 # ── FFmpeg helpers ────────────────────────────────────────────────────────────
 

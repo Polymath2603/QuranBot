@@ -288,7 +288,6 @@ def render_verse_png(
         lw = get_text_width(draw, ln, font)
         x  = (canvas_w - lw) // 2
 
-        # Unified renderer replaces try...except blocks
         draw_arabic_line(draw, (x, y), ln, font=font, fill=fg)
         y += line_h
 
@@ -305,8 +304,6 @@ def gen_verse_image(
     resolution: str = DEFAULT_IMAGE_RESOLUTION,
 ) -> bytes:
     """Render verse text to PNG bytes."""
-    # clean_verse removes Dagger Alif and Quranic pause/annotation marks
-    # to ensure a cleaner visual appearance in video frames.
     cleaned = clean_verse(text, font_key)
 
     img = render_verse_png(cleaned, font_key=font_key, bg_key=bg_key, resolution=resolution)
