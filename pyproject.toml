@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quranbot"
+version = "0.1.0"
+description = "Quran toolkit with Telegram bot and desktop video generation tools."
+requires-python = ">=3.10"
+dependencies = [
+    "python-telegram-bot[job-queue]>=21.3",
+    "python-dotenv>=1.0.0",
+    "SQLAlchemy>=2.0.0",
+    "aiosqlite>=0.22.1",
+    "rapidfuzz>=3.0.0",
+    "Pillow>=10.0.0",
+    "json5",
+    "arabic-reshaper>=3.0.0",
+    "python-bidi>=0.4.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[tool.setuptools]
+py-modules = ["bot", "bot_handlers", "bot_router", "bot_app", "video_cli", "video_gui", "config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
