@@ -220,13 +220,17 @@ def gen_video(
         segs = []
         for idx, (png, dur) in enumerate(pngs):
             seg = tmp / f"seg_{idx:04d}.mov"
-            fi  = min(half, dur * 0.4)
-            fo  = min(half, dur * 0.4)
-            fo_start = max(0.0, dur - fo)
-            vf = (
-                f"fade=t=in:st=0:d={fi:.4f}:alpha=1,"
-                f"fade=t=out:st={fo_start:.4f}:d={fo:.4f}:alpha=1"
-            )
+            # Only fade-in on first clip, fade-out on last clip
+            # Middle clips cut cleanly — no 500ms blank gap between ayahs
+            fade_parts = []
+            if idx == 0:
+                fi = min(half, dur * 0.4)
+                fade_parts.append(f"fade=t=in:st=0:d={fi:.4f}:alpha=1")
+            if idx == len(pngs) - 1:
+                fo = min(half, dur * 0.4)
+                fo_start = max(0.0, dur - fo)
+                fade_parts.append(f"fade=t=out:st={fo_start:.4f}:d={fo:.4f}:alpha=1")
+            vf = ",".join(fade_parts) if fade_parts else "null"
             _run([
                 "-loop", "1", "-i", str(png),
                 "-vf", vf,
@@ -316,7 +320,7 @@ def gen_video(
              f"setpts=PTS+{sync}/TB,"
              f"trim=start=0:end={total_dur:.4f},"
              f"setpts=PTS-STARTPTS,"
-             f"scale={vw}:{vh},setsar=1[txt]"),
+             f"scale={vw}:{vh}:flags=lanczos,setsar=1[txt]"),
             f"[bg][txt]overlay=0:0:format=auto,trim=0:{total_dur:.4f},setpts=PTS-STARTPTS[vout]",
         ])
 
