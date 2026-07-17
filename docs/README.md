@@ -2,7 +2,6 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/Polymath2603/QuranBot)](https://github.com/Polymath2603/QuranBot/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/Polymath2603/QuranBot?style=social)](https://github.com/Polymath2603/QuranBot/stargazers)
-[![GitHub Downloads](https://img.shields.io/github/downloads/Polymath2603/QuranBot/total)](https://github.com/Polymath2603/QuranBot/releases)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
