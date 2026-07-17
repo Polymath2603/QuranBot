@@ -1,8 +1,8 @@
 # QuranBot
 
-[![GitHub Release](https://img.shields.io/github/v/release/user/quranbot)](https://github.com/user/quranbot/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/user/quranbot?style=social)](https://github.com/user/quranbot/stargazers)
-[![GitHub Downloads](https://img.shields.io/github/downloads/user/quranbot/total)](https://github.com/user/quranbot/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/Polymath2603/QuranBot)](https://github.com/Polymath2603/QuranBot/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/Polymath2603/QuranBot?style=social)](https://github.com/Polymath2603/QuranBot/stargazers)
+[![GitHub Downloads](https://img.shields.io/github/downloads/Polymath2603/QuranBot/total)](https://github.com/Polymath2603/QuranBot/releases)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e)
 
@@ -53,7 +53,7 @@ python3 video_cli.py -s 108 -v Alafasy_64kbps -t enhanced -o kawthar.mp4
 **Requirements:** Python 3.10+, FFmpeg
 
 ```bash
-git clone https://github.com/user/quranbot
+git clone https://github.com/Polymath2603/QuranBot
 cd quranbot
 pip install -r requirements.txt
 
@@ -71,7 +71,7 @@ python3 video_gui.py
 
 | | |
 |---|---|
-| PayPal | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
+| PayPal | [paypal.com/ncp/payment/W78F6W4TXZ4CS](https://paypal.com/ncp/payment/W78F6W4TXZ4CS) |
 | Binance | `1011264323` |
 | Bybit | `467077834` |
 | TRC20 | `TMW5uSDN6sMUBNirMoqY1icpsfa7GhPZfK` |

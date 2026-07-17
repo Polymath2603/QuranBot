@@ -72,7 +72,7 @@ python3 video_cli.py -s 108 -v Alafasy_64kbps -t enhanced -o kawthar.mp4
 
 1. **التحميل والتثبيت**:
    ```bash
-   git clone https://github.com/yourname/quranbot
+   git clone https://github.com/Polymath2603/QuranBot
    cd quranbot
    pip install -r requirements.txt
    ```
@@ -95,7 +95,7 @@ python3 video_cli.py -s 108 -v Alafasy_64kbps -t enhanced -o kawthar.mp4
 
 | | |
 |---|---|
-| 💳 **PayPal** | `paypal.com/ncp/payment/W78F6W4TXZ4CS` |
+| 💳 **PayPal** | [paypal.com/ncp/payment/W78F6W4TXZ4CS](https://paypal.com/ncp/payment/W78F6W4TXZ4CS) |
 | 🔸 **Binance** | `1011264323` |
 | 🟡 **Bybit** | `467077834` |
 | 🟢 **TRC20** | `TMW5uSDN6sMUBNirMoqY1icpsfa7GhPZfK` |
