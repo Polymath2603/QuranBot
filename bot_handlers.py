@@ -8,11 +8,23 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, InputMediaPhoto, Message
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
-    MessageHandler, PreCheckoutQueryHandler, filters, ContextTypes
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LabeledPrice,
+    Message,
+    Update,
 )
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    PreCheckoutQueryHandler,
+    filters,
+)
+
 
 def _patch_reply(func):
     async def wrapper(*args, **kwargs):
@@ -26,55 +38,92 @@ Message.reply_photo = _patch_reply(Message.reply_photo)
 Message.reply_video = _patch_reply(Message.reply_video)
 Message.reply_audio = _patch_reply(Message.reply_audio)
 Message.reply_document = _patch_reply(Message.reply_document)
+from sqlalchemy import select
 from telegram.request import HTTPXRequest
 
 from config import (
-    BOT_TOKEN, VOICES, DATA_DIR, OUTPUT_DIR, DEFAULT_VOICE,
-    CHANNEL_URL, CHANNEL_ID, DONATE_URL,
-    HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT, HTTP_WRITE_TIMEOUT,
-    HTTP_POOL_SIZE, HTTP_POOL_TIMEOUT,
-    VIDEO_DEFAULT_RATIO, VIDEO_DEFAULT_BG, VIDEO_DEFAULT_FONT,
-    ADMIN_IDS, MAX_AYAS_PER_REQUEST, CHAR_LIMIT,
-    DAILY_HADITH_COUNT, DAILY_HADITH_HOURS,
-    IMAGE_DEFAULT_FONT, IMAGE_DEFAULT_BG, DEFAULT_IMAGE_RESOLUTION,
-    PAGE_SOURCES, DEFAULT_PAGE_SOURCE,
-    TAFSIR_SOURCES, DEFAULT_TAFSIR,
-    img_fid_key, vid_fid_key, aud_fid_key,
-    IMAGE_RESOLUTIONS
+    ADMIN_IDS,
+    AUDIO_DIR,
+    BOT_TOKEN,
+    CHANNEL_ID,
+    CHANNEL_URL,
+    CHAR_LIMIT,
+    DAILY_HADITH_COUNT,
+    DAILY_HADITH_HOURS,
+    DATA_DIR,
+    DEFAULT_IMAGE_RESOLUTION,
+    DEFAULT_PAGE_SOURCE,
+    DEFAULT_TAFSIR,
+    DEFAULT_VOICE,
+    DONATE_URL,
+    HTTP_CONNECT_TIMEOUT,
+    HTTP_POOL_SIZE,
+    HTTP_POOL_TIMEOUT,
+    HTTP_READ_TIMEOUT,
+    HTTP_WRITE_TIMEOUT,
+    IMAGE_DEFAULT_BG,
+    IMAGE_DEFAULT_FONT,
+    MAX_AYAS_PER_REQUEST,
+    OUTPUT_DIR,
+    PAGE_SOURCES,
+    TAFSIR_SOURCES,
+    VIDEO_DEFAULT_BG,
+    VIDEO_DEFAULT_FONT,
+    VIDEO_DEFAULT_RATIO,
+    VOICES,
+    aud_fid_key,
+    img_fid_key,
+    vid_fid_key,
 )
+from core.audio import gen_mp3
 from core.data import (
-    load_quran_data, load_quran_text, load_quran_text_simple,
+    get_sura_aya_count,
+    get_sura_display_name,
+    get_sura_name,
+    get_sura_start_index,
+    load_quran_data,
+    load_quran_text,
+    load_quran_text_simple,
     replace_basmala_symbol,
-    get_sura_name, get_sura_display_name,
-    get_sura_aya_count, get_sura_start_index
 )
-from core.search    import search, make_snippet
-from core.tafsir    import get_tafsir
-from core.audio     import gen_mp3
-from core.video     import gen_video
+from core.database import (
+    get_db_user,
+    get_session,
+    get_stats,
+    increment_stat,
+    init_db,
+    update_user_field,
+)
+from core.hadith import format_hadith, get_random_hadith
+from core.image import gen_verse_image
+from core.lang import t
+from core.mushaf import send_mushaf_page
+from core.nlu import parse_message
+from core.queue import QueueItem, request_queue
+from core.search import make_snippet, search
 from core.subtitles import get_verse_durations
-from core.verses    import (
-    build_verse_keyboard, build_more_keyboard,
-    send_text_single, send_text_range,
+from core.tafsir import get_tafsir
+from core.utils import (
+    check_and_purge_storage,
+    file_id_count,
+    get_file_id,
+    get_free_mb,
+    is_rate_limited,
+    log_error,
+    make_progress_cb,
+    safe_filename,
+    set_file_id,
+)
+from core.verses import (
+    _build_img_text,
+    build_more_keyboard,
+    build_verse_keyboard,
+    send_img_page,
     send_paged_message,
-    send_img_page, _build_img_text
+    send_text_range,
+    send_text_single,
 )
-from core.image     import gen_verse_image
-from core.mushaf    import send_mushaf_page
-from core.database  import (
-    init_db, get_session, get_db_user, update_user_field, User,
-    get_stats, increment_stat
-)
-from sqlalchemy import select
-from core.lang      import t
-from core.nlu       import parse_message
-from core.utils     import (
-    safe_filename, check_and_purge_storage, is_rate_limited,
-    get_file_id, set_file_id, file_id_count,
-    get_free_mb, make_progress_cb, log_error
-)
-from core.queue     import request_queue, QueueItem
-from core.hadith    import get_random_hadith, format_hadith
+from core.video import gen_video
 
 logging.basicConfig(format="%(asctime)s %(name)s %(levelname)s %(message)s", level=logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -311,14 +360,14 @@ async def settings_list_handler(update: Update, context: ContextTypes.DEFAULT_TY
     ltype = parts[1]
     try: page = int(parts[2])
     except: page = 0
-    
+
     user = await get_db_user(update.effective_user)
     lang = user.language
-    
+
     options = [] # (label, value)
     title = ""
     back_call = "menu_settings_other"
-    
+
     if ltype == "lang":
         title = t("setting_language", lang)
         options = [(t(f"lang_{k}", lang), k) for k in ["ar", "en", "tr", "ur", "fr", "id"]]
@@ -351,7 +400,7 @@ async def settings_list_handler(update: Update, context: ContextTypes.DEFAULT_TY
     per_page = 8
     total_pages = (len(options) + per_page - 1) // per_page
     chunk = options[page * per_page:(page + 1) * per_page]
-    
+
     # Current value check
     cur_val = None
     if ltype == "lang": cur_val = user.language
@@ -371,18 +420,18 @@ async def settings_list_handler(update: Update, context: ContextTypes.DEFAULT_TY
         row.append(InlineKeyboardButton(f"{mark}{lbl}", callback_data=f"set_{ltype}_{val}"))
         if len(row) == 2: keyboard.append(row); row = []
     if row: keyboard.append(row)
-    
+
     nav = []
     if page > 0: nav.append(InlineKeyboardButton(t("prev", lang), callback_data=f"list_{ltype}_{page-1}"))
     if page < total_pages - 1: nav.append(InlineKeyboardButton(t("next", lang), callback_data=f"list_{ltype}_{page+1}"))
     if nav: keyboard.append(nav)
-    
+
     # Correct back button based on context
     if ltype in ["vfont", "vtheme", "vratio"]: back_call = "menu_settings_video"
     elif ltype in ["ifont", "itheme", "ires"]: back_call = "menu_settings_photo"
-    
+
     keyboard.append([InlineKeyboardButton(t("back", lang), callback_data=back_call)])
-    
+
     await query.edit_message_text(f"⚙️ {title}", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def settings_set_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -392,9 +441,9 @@ async def settings_set_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     parts = query.data.split("_")
     ltype = parts[1]
     value = "_".join(parts[2:])
-    
+
     user = await get_db_user(update.effective_user)
-    
+
     if ltype == "lang":
         await update_user_field(user.telegram_id, language=value)
         await settings_handler(update, context)
@@ -403,7 +452,7 @@ async def settings_set_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update_user_field(user.telegram_id, tafsir_source=value)
         await settings_other_handler(update, context)
         return
-    
+
     # Map ltype to preference key
     pref_map = {
         "source": "page_source",
@@ -417,7 +466,7 @@ async def settings_set_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if pref_key:
         from core.database import update_user_preference
         await update_user_preference(user.telegram_id, pref_key, value)
-    
+
     # Return to appropriate menu
     if ltype in ["source", "format"]: await settings_other_handler(update, context)
     elif ltype in ["vfont", "vtheme", "vratio"]: await settings_video_handler(update, context)
@@ -434,7 +483,7 @@ async def settings_toggle_handler(update: Update, context: ContextTypes.DEFAULT_
     except Exception: pass
     user = await get_db_user(update.effective_user)
     data = query.data
-    
+
     if data == "toggle_format":
         await _cycle_pref(user, "text_format", ["msg", "lrc", "srt"], "msg")
         await settings_other_handler(update, context)
@@ -1162,7 +1211,7 @@ async def _send_search_results(message, results: list, query_text: str, lang: st
     buttons      = []
     i            = page_offset
     limit        = min(page_offset + RES_PER_PAGE, len(results))
-    
+
     while i < limit:
         r     = results[i]
         sname = get_sura_display_name(quran_data, r["sura"], lang)
@@ -1178,14 +1227,14 @@ async def _send_search_results(message, results: list, query_text: str, lang: st
         row.append(InlineKeyboardButton(f"{b['sname']} {b['aya']}", callback_data=f"search_result_{b['sura']}_{b['aya']}"))
         if len(row) == 2: rows.append(row); row = []
     if row: rows.append(row)
-    
+
     nav = []
     if page_offset > 0:
         nav.append(InlineKeyboardButton("⬅️", callback_data=f"search_page_{max(0, page_offset - RES_PER_PAGE)}_{query_text[:40]}"))
     if i < len(results):
         nav.append(InlineKeyboardButton("➡️", callback_data=f"search_page_{i}_{query_text[:40]}"))
     if nav: rows.append(nav)
-    
+
     # Add page indicator
     page_num = (page_offset // RES_PER_PAGE) + 1
     total_pages = (len(results) + RES_PER_PAGE - 1) // RES_PER_PAGE
@@ -1310,9 +1359,10 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = user.language
     if not ADMIN_IDS or update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text(t("admin_not_allowed", lang)); return
-    from core.utils import _rate_store
-    from config import RATE_WINDOW_SECONDS, RATE_MAX_REQUESTS
     import time as _time
+
+    from config import RATE_MAX_REQUESTS, RATE_WINDOW_SECONDS
+    from core.utils import _rate_store
     session        = get_session()
     from sqlalchemy import func as _func
     pending_q      = (await session.execute(select(_func.count(QueueItem.id)).filter_by(status="pending"))).scalar() or 0
@@ -1425,6 +1475,20 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------------------------
 # Entry point / wiring
 # ---------------------------------------------------------------------------
+
+async def _daily_hadith_job(context) -> None:
+    if not CHANNEL_ID: return
+    entry = get_random_hadith()
+    if not entry: return
+    text = format_hadith(entry)
+    if not text: return
+    try:
+        await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        await increment_stat("hadiths_sent_channel")
+    except Exception as e:
+        logger.error("Daily hadith job failed: %s", e)
+        log_error(e, context="daily_hadith_job")
+
 
 async def _post_init(app):
     await init_db()

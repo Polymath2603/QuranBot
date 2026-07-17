@@ -21,13 +21,18 @@ import re
 from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont, features
+
 RAQM_AVAILABLE = features.check('raqm')
 
 from config import (
-    FONT_PATHS, IMAGE_DEFAULT_FONT,
-    IMAGE_BACKGROUNDS, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG,
+    DEFAULT_IMAGE_RESOLUTION,
+    FONT_PATHS,
+    IMAGE_BACKGROUNDS,
+    IMAGE_DEFAULT_BG,
+    IMAGE_DEFAULT_FONT,
     IMAGE_PADDING,
-    IMAGE_RESOLUTIONS, DEFAULT_IMAGE_RESOLUTION,
+    IMAGE_RESOLUTIONS,
+    IMAGE_TEXT_COLORS,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,7 +109,7 @@ def draw_arabic_line(draw: ImageDraw.ImageDraw, xy: tuple, text: str, font, fill
             return
         except KeyError:
             pass
-    
+
     # Fallback to manual shaping (LTR)
     shaped = _reshape_line(text)
     draw.text(xy, shaped, font=font, fill=fill, **kwargs)
@@ -183,7 +188,7 @@ def clean_verse(text: str, font_key: str = IMAGE_DEFAULT_FONT) -> str:
     """
     Remove specific non-letter characters for cleaner visual display:
     - U+0670: Dagger Alif (pronunciation guide, often visually distracting in some fonts).
-    - U+06D6-U+06ED: Quranic annotation marks (pause signs, small high letters etc.) 
+    - U+06D6-U+06ED: Quranic annotation marks (pause signs, small high letters etc.)
     """
     from config import FONT_SETTINGS
     cfg = FONT_SETTINGS.get(font_key, FONT_SETTINGS[IMAGE_DEFAULT_FONT])

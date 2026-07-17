@@ -1,24 +1,32 @@
 """verses.py — Verse display, formatting, and Telegram send helpers."""
 from __future__ import annotations
+
 import logging
 from io import BytesIO
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+from config import (
+    CHAR_LIMIT,
+    IMAGE_CHARS_LIMIT,
+)
+
 from .data import (
-    get_sura_display_name, get_sura_start_index,
-    strip_basmala, replace_basmala_symbol,
+    get_sura_display_name,
+    get_sura_start_index,
+    replace_basmala_symbol,
+    strip_basmala,
 )
 from .image import (
-    gen_verse_image, to_arabic, to_number,
-    basmala_for_font, BASMALA_GLYPH, clean_verse,
+    BASMALA_GLYPH,
+    clean_verse,
+    gen_verse_image,
+    to_number,
 )
 from .lang import t
 from .search import get_page
-from .subtitles import build_srt, build_lrc
+from .subtitles import build_lrc, build_srt
 from .utils import safe_filename
-from config import (
-    CHAR_LIMIT, IMAGE_CHARS_LIMIT,
-    IMAGE_DEFAULT_FONT, IMAGE_DEFAULT_BG, DEFAULT_IMAGE_RESOLUTION,
-)
 
 logger = logging.getLogger(__name__)
 

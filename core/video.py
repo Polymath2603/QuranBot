@@ -15,16 +15,25 @@ Ratio (landscape/portrait) controls output resolution from VIDEO_SIZES.
 Progress callback: gen_video accepts progress_cb(pct: int, msg: str).
 """
 
-import json, logging, subprocess, tempfile
+import json
+import logging
+import subprocess
+import tempfile
 from pathlib import Path
 
 from config import (
-    VIDEO_FPS, VIDEO_FADE_DURATION, VIDEO_SYNC_OFFSET,
-    VIDEO_SIZES, VIDEO_DEFAULT_RATIO,
-    VIDEO_DEFAULT_FONT, VIDEO_DEFAULT_BG,
-    FFMPEG_BIN, FFPROBE_BIN,
+    FFMPEG_BIN,
+    FFPROBE_BIN,
+    VIDEO_DEFAULT_BG,
+    VIDEO_DEFAULT_FONT,
+    VIDEO_DEFAULT_RATIO,
+    VIDEO_FADE_DURATION,
+    VIDEO_FPS,
+    VIDEO_SIZES,
+    VIDEO_SYNC_OFFSET,
 )
-from .image import get_font, wrap_text, get_text_width, clean_verse, to_number
+
+from .image import clean_verse, to_number
 
 logger = logging.getLogger(__name__)
 
@@ -188,13 +197,13 @@ def gen_video(
 
     with tempfile.TemporaryDirectory() as _tmp:
         tmp = Path(_tmp)
-        
+
         import importlib
         try:
             tmpl_mod = importlib.import_module(f"core.video_templates.{template}")
         except ImportError:
             tmpl_mod = importlib.import_module("core.video_templates.default")
-            
+
         static_overlay_path = None
         if hasattr(tmpl_mod, "render_permanent_overlay"):
             _progress(0, "rendering static overlay…")
@@ -258,10 +267,7 @@ def gen_video(
         _progress(70, "compositing…")
 
         sync = VIDEO_SYNC_OFFSET
-        txt_inputs = ["-i", str(text_track)]
-        
-        bg_inputs = []
-        
+
         # Handle "folder" by picking a random media (permanent for now)
         if bg_mode == "folder" and bg_path:
             import random
@@ -280,7 +286,7 @@ def gen_video(
 
         inputs_args = ["-i", str(text_track)]
         idx_txt = 0
-        
+
         idx_bg = None
         if bg_mode in ("image", "video") and bg_path:
             bg_cmd = ["-stream_loop", "-1", "-i", bg_path] if bg_mode == "video" else ["-loop", "1", "-i", bg_path]
@@ -313,7 +319,7 @@ def gen_video(
         if static_overlay_path:
             filters.append(f"[bg0][{idx_static}:v]overlay=0:0:shortest=1[bg]")
         else:
-            filters.append(f"[bg0]copy[bg]")
+            filters.append("[bg0]copy[bg]")
 
         filters.extend([
             (f"[{idx_txt}:v]"

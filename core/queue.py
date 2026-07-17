@@ -14,14 +14,14 @@ Usage:
 """
 
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, select
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, DateTime, Integer, String, Text, select
+
 from .database import Base, get_session
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class RequestQueue:
                 .order_by(QueueItem.id)
             )
             pending = result.scalars().all()
-            
+
             # Populate DB-level cancelled to memory cache as requested by user
             c_result = await session.execute(
                 select(QueueItem.id).filter_by(status="cancelled")
@@ -94,7 +94,7 @@ class RequestQueue:
             await session.commit()
         finally:
             await session.close()
-            
+
         for item_id in pending_ids:
             await self._queue.put(item_id)
         asyncio.create_task(self._consume())
@@ -132,13 +132,13 @@ class RequestQueue:
             item = result.scalars().first()
             if not item or item.status in ("cancelled", "done"):
                 return False
-            
+
             # If processing, cancel the task
             if item.status == "processing":
                 if self._current_item_id == item_id and self._current_task:
                     self._current_task.cancel()
                     logger.info("Cancelled processing task for item %d", item_id)
-            
+
             item.status = "cancelled"
             await session.commit()
             self._cancelled_ids.add(item_id)
@@ -237,8 +237,9 @@ class RequestQueue:
             result = await session.execute(select(QueueItem).filter_by(id=item_id))
             item = result.scalars().first()
             if item and item.status_msg_id:
-                from .lang import t
                 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+                from .lang import t
                 kb = InlineKeyboardMarkup([[
                     InlineKeyboardButton(t("queue_cancel_btn", item.lang), callback_data=f"queue_cancel_{item.id}")
                 ]])
@@ -297,15 +298,16 @@ class RequestQueue:
 
     async def _broadcast_positions(self):
         """Edit status messages for all pending items to show updated position."""
-        from .lang import t
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        from .lang import t
         session = get_session()
         try:
             result = await session.execute(select(QueueItem).filter_by(status="pending").order_by(QueueItem.id))
             pending = result.scalars().all()
         finally:
             await session.close()
-            
+
         for pos, item in enumerate(pending, 1):
             if not item.status_msg_id:
                 continue

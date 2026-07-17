@@ -1,14 +1,37 @@
+import logging
+
 from telegram import Update
 from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
+
 from bot_handlers import (
-    start_handler, settings_handler, settings_other_handler,
-    settings_video_handler, settings_photo_handler, donate_handler,
-    show_sura_list, settings_list_handler, settings_set_handler,
-    settings_toggle_handler, more_handler, mushaf_handler, download_handler,
-    voice_list_handler, voice_handler, stars_handler, play_audio_handler,
-    video_generate_handler, image_handler, text_handler, tafsir_handler,
-    back_to_verse_handler, page_handler, queue_cancel_handler,
-    search_result_handler, search_page_handler,
+    back_to_verse_handler,
+    donate_handler,
+    download_handler,
+    image_handler,
+    more_handler,
+    mushaf_handler,
+    page_handler,
+    play_audio_handler,
+    queue_cancel_handler,
+    search_page_handler,
+    search_result_handler,
+    settings_handler,
+    settings_list_handler,
+    settings_other_handler,
+    settings_photo_handler,
+    settings_set_handler,
+    settings_toggle_handler,
+    settings_video_handler,
+    show_sura_list,
+    stars_handler,
+    start_handler,
+    tafsir_handler,
+    text_handler,
+    video_generate_handler,
+    voice_handler,
+    voice_list_handler,
 )
 
 _EXACT: dict = {

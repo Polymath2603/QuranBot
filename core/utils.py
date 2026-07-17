@@ -1,8 +1,11 @@
 """utils.py — Shared utility functions for QBot."""
-import logging, shutil, time
+import logging
+import shutil
+import time
 from collections import OrderedDict
 from pathlib import Path
-from config import PURGE_THRESHOLD_MB, WARN_THRESHOLD_MB, RATE_WINDOW_SECONDS, RATE_MAX_REQUESTS
+
+from config import PURGE_THRESHOLD_MB, RATE_MAX_REQUESTS, RATE_WINDOW_SECONDS, WARN_THRESHOLD_MB
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +91,7 @@ class LRUCache:
 #                         "video:{voice}:{sura}:{start}:{end}:{bits}"
 # ---------------------------------------------------------------------------
 import json as _json
+
 from config import OUTPUT_DIR as _OUTPUT_DIR
 
 _FILE_ID_PATH = _OUTPUT_DIR / "file_ids.json"
@@ -132,6 +136,7 @@ _load_file_ids()
 # ---------------------------------------------------------------------------
 import asyncio as _asyncio
 
+
 def make_progress_cb(edit_coro_fn, loop, icon: str = "🎬"):
     """
     Return a progress callback suitable for gen_mp3 / gen_video.
@@ -153,7 +158,9 @@ def make_progress_cb(edit_coro_fn, loop, icon: str = "🎬"):
 # Appends one JSON object per error. Capped at 500 entries (oldest dropped).
 # ---------------------------------------------------------------------------
 import traceback as _traceback
-from datetime import datetime as _dt, timezone as _tz
+from datetime import datetime as _dt
+from datetime import timezone as _tz
+
 from config import BASE_DIR as _BASE_DIR
 
 _ERRORS_PATH = _BASE_DIR / "errors.json"

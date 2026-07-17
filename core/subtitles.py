@@ -1,6 +1,9 @@
 """subtitles.py — SRT / LRC generation with real per-verse timestamps."""
-import json, logging, subprocess
+import json
+import logging
+import subprocess
 from pathlib import Path
+
 from config import FFPROBE_BIN
 
 logger = logging.getLogger(__name__)

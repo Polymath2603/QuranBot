@@ -1,4 +1,5 @@
 import json
+
 from config import LOCALE_DIR
 
 _strings: dict = {}

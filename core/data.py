@@ -1,7 +1,8 @@
-import json5
 import re
 from pathlib import Path
 from typing import Any
+
+import json5
 
 # Diacritics and Tatweel (U+0640) — stripped for normalization
 _DIACRITICS = re.compile(r'[\u0610-\u061A\u064B-\u065F\u0670\u0640]')
@@ -66,7 +67,6 @@ def replace_basmala_page(verse_text: str, sura: int, aya: int) -> str:
 
 def load_quran_data(data_dir: Path) -> dict[str, Any]:
     """Load Quran metadata from quran-data.json.
-    
     Source: tanzil.net — https://tanzil.net/docs/quran_metadata
     License: CC BY 3.0
     """
@@ -78,7 +78,6 @@ def load_quran_data(data_dir: Path) -> dict[str, Any]:
 
 def load_quran_text(data_dir: Path) -> list[str]:
     """Load Quran text (Uthmani script) — for video rendering.
-    
     Source: tanzil.net — https://tanzil.net/docs/quran_text  (quran-uthmani.txt)
     License: CC BY 3.0
     """

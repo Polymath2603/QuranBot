@@ -4,66 +4,123 @@ To add a reciter: append to VOICES.
 To add a tafsir source: append to TAFSIR_SOURCES.
 To add a mushaf image source: append to PAGE_SOURCES.
 To add a hadith database: append to HADITH_FILES.
+
+The env-derived / scalar settings are centralized in the typed ``Settings``
+dataclass (single source of truth, validated once at import). The historical
+flat module-level names (BOT_TOKEN, VOICES, VIDEO_SIZES, ...) are re-exported
+from ``settings`` so every existing ``from config import X`` site keeps working
+unchanged.
 """
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent
 DATA_DIR   = BASE_DIR / "data"
-AUDIO_DIR   = DATA_DIR / "audio"
+AUDIO_DIR  = BASE_DIR / "audio"
 OUTPUT_DIR = BASE_DIR / "output"
 LOCALE_DIR = BASE_DIR / "locales"
 
-# ── Bot credentials (from .env) ───────────────────────────────────────────────
-BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
-CHANNEL_URL = os.getenv("CHANNEL_URL", "") 
-CHANNEL_ID  = os.getenv("CHANNEL_ID", "")
-DONATE_URL  = os.getenv("DONATE_URL", "")   # link to donation post
-USERNAME    = os.getenv("PAGE_USERNAME", "")
 
-# ── API endpoints ─────────────────────────────────────────────────────────────
-AUDIO_API = "https://everyayah.com/data"
-QURAN_API = "https://api.alquran.cloud/v1"
+@dataclass(frozen=True)
+class Settings:
+    """Typed, validated application configuration.
 
-# ── FFmpeg — use system-installed ffmpeg/ffprobe ───────────────────────────────
-FFMPEG_BIN  = "ffmpeg"
-FFPROBE_BIN = "ffprobe"
+    Built once from environment + constants. Immutable so downstream code
+    can rely on stable values.
+    """
 
-# ── HTTP / network ────────────────────────────────────────────────────────────
-HTTP_CONNECT_TIMEOUT = 30
-HTTP_READ_TIMEOUT    = 180
-HTTP_WRITE_TIMEOUT   = 180
-HTTP_POOL_SIZE       = 8
-HTTP_POOL_TIMEOUT    = 60
-DOWNLOAD_TIMEOUT     = 60
+    # ── Bot credentials (from .env) ──────────────────────────────────
+    bot_token:  str = field(default_factory=lambda: os.getenv("BOT_TOKEN", ""))
+    channel_url: str = field(default_factory=lambda: os.getenv("CHANNEL_URL", ""))
+    channel_id: str = field(default_factory=lambda: os.getenv("CHANNEL_ID", ""))
+    donate_url: str = field(default_factory=lambda: os.getenv("DONATE_URL", ""))
+    username:   str = field(default_factory=lambda: os.getenv("PAGE_USERNAME", ""))
 
-# ── Limits ────────────────────────────────────────────────────────────────────
-CHAR_LIMIT           = 800    # max chars per Telegram message
-MAX_AYAS_PER_REQUEST = 40     # max ayas per audio/video request
-IMAGE_CHARS_LIMIT    = 1200   # max verse chars for image button (single-image only, no paging)
+    # ── API endpoints ────────────────────────────────────────────────
+    audio_api: str = "https://everyayah.com/data"
+    quran_api: str = "https://api.alquran.cloud/v1"
 
-# ── Rate limiting ─────────────────────────────────────────────────────────────
-RATE_WINDOW_SECONDS  = 3600
-RATE_MAX_REQUESTS    = 10
+    # ── FFmpeg — system-installed binaries ───────────────────────────
+    ffmpeg_bin:  str = "ffmpeg"
+    ffprobe_bin: str = "ffprobe"
 
-# ── Storage purge ─────────────────────────────────────────────────────────────
-PURGE_THRESHOLD_MB   = 200
-WARN_THRESHOLD_MB    = 500
+    # ── HTTP / network ───────────────────────────────────────────────
+    http_connect_timeout: int = 30
+    http_read_timeout:    int = 180
+    http_write_timeout:   int = 180
+    http_pool_size:       int = 8
+    http_pool_timeout:    int = 60
+    download_timeout:     int = 60
 
-# ── Daily hadith scheduler ────────────────────────────────────────────────────
-# Send times auto-distributed across 24h UTC.
-# count=3 → [0, 8, 16];  count=4 → [0, 6, 12, 18]
-DAILY_HADITH_COUNT = int(os.getenv("DAILY_HADITH_COUNT", "3"))
-DAILY_HADITH_HOURS = [round(24 * i / DAILY_HADITH_COUNT) % 24 for i in range(DAILY_HADITH_COUNT)]
+    # ── Limits ───────────────────────────────────────────────────────
+    char_limit:           int = 800
+    max_ayas_per_request: int = 40
+    image_chars_limit:    int = 1200
 
-# ── Admin ─────────────────────────────────────────────────────────────────────
-ADMIN_IDS: list = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+    # ── Rate limiting ────────────────────────────────────────────────
+    rate_window_seconds: int = 3600
+    rate_max_requests:   int = 10
 
-# ── Voices / reciters ─────────────────────────────────────────────────────────
+    # ── Storage purge ────────────────────────────────────────────────
+    purge_threshold_mb: int = 200
+    warn_threshold_mb:  int = 500
+
+    # ── Daily hadith scheduler ───────────────────────────────────────
+    daily_hadith_count: int = field(
+        default_factory=lambda: int(os.getenv("DAILY_HADITH_COUNT", "3"))
+    )
+
+    # ── Admin ────────────────────────────────────────────────────────
+    admin_ids: list[int] = field(default_factory=lambda: [
+        int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()
+    ])
+
+
+settings = Settings()
+
+# Re-export flat scalars from the typed Settings object (back-compat API).
+BOT_TOKEN   = settings.bot_token
+CHANNEL_URL = settings.channel_url
+CHANNEL_ID  = settings.channel_id
+DONATE_URL  = settings.donate_url
+USERNAME    = settings.username
+
+AUDIO_API = settings.audio_api
+QURAN_API = settings.quran_api
+
+FFMPEG_BIN  = settings.ffmpeg_bin
+FFPROBE_BIN = settings.ffprobe_bin
+
+HTTP_CONNECT_TIMEOUT = settings.http_connect_timeout
+HTTP_READ_TIMEOUT    = settings.http_read_timeout
+HTTP_WRITE_TIMEOUT   = settings.http_write_timeout
+HTTP_POOL_SIZE       = settings.http_pool_size
+HTTP_POOL_TIMEOUT    = settings.http_pool_timeout
+DOWNLOAD_TIMEOUT     = settings.download_timeout
+
+CHAR_LIMIT           = settings.char_limit
+MAX_AYAS_PER_REQUEST = settings.max_ayas_per_request
+IMAGE_CHARS_LIMIT    = settings.image_chars_limit
+
+RATE_WINDOW_SECONDS  = settings.rate_window_seconds
+RATE_MAX_REQUESTS    = settings.rate_max_requests
+
+PURGE_THRESHOLD_MB   = settings.purge_threshold_mb
+WARN_THRESHOLD_MB    = settings.warn_threshold_mb
+
+DAILY_HADITH_COUNT = settings.daily_hadith_count
+DAILY_HADITH_HOURS = [
+    round(24 * i / DAILY_HADITH_COUNT) % 24 for i in range(DAILY_HADITH_COUNT)
+]
+
+ADMIN_IDS: list = settings.admin_ids
+
+# ── Voices / reciters ────────────────────────────────────────────────────────
 # Each entry: code → {ar: Arabic name, en: English name}
 DEFAULT_VOICE = "Nasser_Alqatami_128kbps"
 VOICES: dict[str, dict] = {

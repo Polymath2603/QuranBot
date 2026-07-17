@@ -30,9 +30,13 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+select = ["F", "W", "I", "E"]
+# E402: intentional lazy imports (circular-import avoidance) are everywhere.
+# E501: line-length is not enforced in this codebase (legacy long lines).
+# E701/E702: one-line compound statements — stylistic, pervasive in this codebase.
+# E722: bare except — tracked as tech-debt; not auto-changed in this pass.
+ignore = ["E402", "E501", "E701", "E702", "E722"]

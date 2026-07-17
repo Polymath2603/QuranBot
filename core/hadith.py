@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import random
 import sqlite3
-from pathlib import Path
 from typing import Optional
 
 from config import DATA_DIR, HADITH_FILES
@@ -55,7 +54,6 @@ def get_random_hadith() -> Optional[dict]:
 
     try:
         con = sqlite3.connect(str(db_path))
-        count = con.execute("SELECT COUNT(*) FROM hadiths").fetchone()[0]
         row   = con.execute(
             "SELECT id, hadith_number, text FROM hadiths ORDER BY RANDOM() LIMIT 1"
         ).fetchone()

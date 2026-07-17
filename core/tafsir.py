@@ -5,13 +5,14 @@ Cache hierarchy:
   2. SQLite DB (persistent across restarts, 30-day TTL)
   3. AlQuran.cloud API
 """
+import asyncio
 import json
 import logging
 import urllib.request
-import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from config import QURAN_API, DOWNLOAD_TIMEOUT, TAFSIR_SOURCES, DEFAULT_TAFSIR
+from config import DEFAULT_TAFSIR, DOWNLOAD_TIMEOUT, QURAN_API, TAFSIR_SOURCES
+
 from .utils import LRUCache
 
 logger    = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ CACHE_TTL = timedelta(days=30)
 
 async def _db_get(key: str) -> str | None:
     try:
-        from .database import get_session, TafsirCache, select
+        from .database import TafsirCache, get_session, select
         s   = get_session()
         result = await s.execute(select(TafsirCache).filter_by(cache_key=key))
         row = result.scalars().first()
@@ -41,7 +42,7 @@ async def _db_get(key: str) -> str | None:
 
 async def _db_set(key: str, text: str) -> None:
     try:
-        from .database import get_session, TafsirCache, select
+        from .database import TafsirCache, get_session, select
         s   = get_session()
         result = await s.execute(select(TafsirCache).filter_by(cache_key=key))
         row = result.scalars().first()

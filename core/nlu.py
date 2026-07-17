@@ -1,7 +1,10 @@
 """nlu.py — Natural Language Understanding for QBot."""
 import re
-from rapidfuzz import process, fuzz
+
+from rapidfuzz import fuzz, process
+
 from .search import normalize_arabic
+
 
 def _build_sura_names(quran_data):
     names = []

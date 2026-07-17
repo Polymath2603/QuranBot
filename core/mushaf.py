@@ -16,7 +16,8 @@ from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 
-from config import DATA_DIR, PAGE_SOURCES, DEFAULT_PAGE_SOURCE
+from config import DATA_DIR, DEFAULT_PAGE_SOURCE, PAGE_SOURCES
+
 from .lang import t
 
 logger = logging.getLogger(__name__)
