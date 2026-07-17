@@ -21,6 +21,7 @@ import re
 from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont, features
+from PIL.Image import Resampling
 
 RAQM_AVAILABLE = features.check('raqm')
 
@@ -269,7 +270,7 @@ def render_verse_png(
             layout.append(BLANK)
     probe.close()
 
-    # ── Compute canvas size ────────────────────────────────────────────────
+    # ── Compute canvas size (base units) ──────────────────────────────────
     line_h  = int(fs * LINE_SPACING)
     half_h  = line_h // 2
 
@@ -283,20 +284,28 @@ def render_verse_png(
         canvas_h = total_h + 2 * PADDING
         y       = PADDING
 
-    # ── Draw ──────────────────────────────────────────────────────────────
-    img  = Image.new("RGBA", (canvas_w, canvas_h), bg)
+    # ── Supersampled draw (2x) → LANCZOS downscale for crisp glyph edges ──
+    SS = 2
+    sw, sh   = canvas_w * SS, canvas_h * SS
+    sfs      = fs * SS
+    sline_h  = line_h * SS
+    shalf_h  = half_h * SS
+    sy       = y * SS
+    sfont    = get_font(font_key, sfs)
+
+    img  = Image.new("RGBA", (sw, sh), bg)
     draw = ImageDraw.Draw(img)
 
     for ln in layout:
         if ln == BLANK:
-            y += half_h; continue
-        lw = get_text_width(draw, ln, font)
-        x  = (canvas_w - lw) // 2
-
-        draw_arabic_line(draw, (x, y), ln, font=font, fill=fg)
-        y += line_h
+            sy += shalf_h; continue
+        lw = get_text_width(draw, ln, sfont)
+        x  = (sw - lw) // 2
+        draw_arabic_line(draw, (x, sy), ln, font=sfont, fill=fg)
+        sy += sline_h
 
     del draw
+    img = img.resize((canvas_w, canvas_h), Resampling.LANCZOS)
     return img
 
 
