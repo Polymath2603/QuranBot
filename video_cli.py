@@ -3,19 +3,16 @@
 
 import argparse
 import asyncio
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Important: Must run from the root directory to access core modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from config import (
-    VOICES, FONT_PATHS, DATA_DIR, AUDIO_DIR, OUTPUT_DIR,
-    VIDEO_TOOL_DEFAULTS
-)
-from core.data import load_quran_data, load_quran_text_simple, get_sura_start_index
+from config import AUDIO_DIR, DATA_DIR, FONT_PATHS, OUTPUT_DIR, VIDEO_TOOL_DEFAULTS, VOICES
 from core.audio import gen_mp3
+from core.data import get_sura_start_index, load_quran_data, load_quran_text_simple
 from core.subtitles import get_verse_durations
 from core.video import gen_video, get_video_filename
 
@@ -35,28 +32,28 @@ def hex_to_rgba(hex_color):
 
 async def main():
     d = VIDEO_TOOL_DEFAULTS
-    
+
     parser = argparse.ArgumentParser(description="Quran Video Generator CLI")
-    
+
     # Selection: sura, sura:aya, or sura:start-end
     parser.add_argument("selection", nargs="?", help="Selection: 'sura' (e.g. 1), 'sura:aya' (e.g. 1:1), or 'sura:start-end' (e.g. 1:1-7)")
-    
+
     # Style
     parser.add_argument("-v", "--voice", default=d["voice"], choices=list(VOICES.keys()), help="Reciter voice")
     parser.add_argument("-f", "--font", default=d["font"], choices=list(FONT_PATHS.keys()), help="Font key")
     parser.add_argument("-t", "--template", default=d["template"], choices=["default", "enhanced"], help="Render template")
-    
+
     # Colors
     parser.add_argument("-tc", "--text-color", default=d["text_color"], help="Text hex color (e.g. #FFFFFF)")
     parser.add_argument("-bw", "--border-width", type=int, default=d["border_width"], help="Border width in pixels")
     parser.add_argument("-bc", "--border-color", default=d["border_color"], help="Border hex color")
-    
+
     # Background
     parser.add_argument("-bm", "--bg-mode", default=d["bg_mode"], choices=["color", "image", "video", "folder"], help="Background mode")
     parser.add_argument("-bp", "--bg-path", default=d["bg_path"], help="Path to bg image/video/folder")
     parser.add_argument("-bcbg", "--bg-color", default=d["bg_color"], help="Background hex color (if mode is color)")
     parser.add_argument("-bb", "--bg-behavior", default=d["bg_behavior"], choices=["permanent", "per_verse"], help="Background behavior")
-    
+
     # Output
     parser.add_argument("-o", "--output", help="Output filename (optional)")
     parser.add_argument("-r", "--ratio", default=d["ratio"], choices=["portrait", "landscape"], help="Aspect ratio")
@@ -101,7 +98,7 @@ async def main():
     # Paths
     out_dir = OUTPUT_DIR / "local"
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if args.output:
         out_file = Path(args.output)
     else:
@@ -139,10 +136,10 @@ async def main():
 
     # Video
     print("Step 2/3: Rendering video frames and compositing...")
-    
+
     tc = hex_to_rgba(args.text_color)
     bc = hex_to_rgba(args.border_color)
-    
+
     bg_path = args.bg_path
     if args.bg_mode == "color":
         bg_path = args.bg_color

@@ -1,7 +1,11 @@
 from random import randint
-from PIL import Image as PILImage, ImageDraw as PILDraw
-from config import VIDEO_PADDING as PADDING, USERNAME, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG, CUSTOM_FONT_PATH
-from core.image import get_font, wrap_text, get_text_width, draw_arabic_line
+
+from PIL import Image as PILImage
+from PIL import ImageDraw as PILDraw
+
+from config import CUSTOM_FONT_PATH, IMAGE_DEFAULT_BG, IMAGE_TEXT_COLORS, USERNAME
+from config import VIDEO_PADDING as PADDING
+from core.image import draw_arabic_line, get_font, get_text_width, wrap_text
 
 # Supersample factor: render at Nx and downscale with LANCZOS for smooth edges.
 SSAA = 2
@@ -76,21 +80,21 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
 
   # Apply 50% dark overlay to dim the background
     draw.rectangle([(0, 0), size], fill=(0, 0, 0, 127))
-    
-  
+
+
     symbol = randint(0xf3, 0xf7)
     title = f"{chr(0x80)}{chr(0x80+sura)}\n{chr(symbol)}"
     ttitle_y = int(fixed_h * 0.2)
     fs1 = 46
     font1 = get_font("", fs1, CUSTOM_FONT_PATH)
     fg1 = text_color
-    
+
     username = f"@ {USERNAME}"
     username_y = int(fixed_h * 0.9)
     fs2 = 26
     font2 = get_font("", fs2, CUSTOM_FONT_PATH)
     fg2 = (225,255,255,50)
-  
+
     overlays = [
         (title, ttitle_y, font1, fs1, fg1),
         (username, username_y, font2, fs2, fg2)
@@ -109,6 +113,6 @@ def render_permanent_overlay(size: tuple, sura: int, text_color: tuple = (255, 2
             else:
                 draw.text((x, current_y), line, font=font, fill=fg, stroke_width=stroke_width, stroke_fill=stroke_color)
             current_y += line_h
-        
+
     del draw
     return img

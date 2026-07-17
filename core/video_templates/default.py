@@ -1,6 +1,9 @@
-from PIL import Image as PILImage, ImageDraw as PILDraw
-from config import VIDEO_PADDING as PADDING, IMAGE_TEXT_COLORS, IMAGE_DEFAULT_BG
-from core.image import get_font, wrap_text, get_text_width, draw_arabic_line
+from PIL import Image as PILImage
+from PIL import ImageDraw as PILDraw
+
+from config import IMAGE_DEFAULT_BG, IMAGE_TEXT_COLORS
+from config import VIDEO_PADDING as PADDING
+from core.image import draw_arabic_line, get_font, get_text_width, wrap_text
 
 # Supersample factor: render the frame at Nx and downscale with LANCZOS so
 # small Arabic glyph edges stay smooth instead of jagged when the player
